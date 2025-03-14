@@ -1,0 +1,13 @@
+.DS_Store
+src/Output/Figures/**
+src/Output/Tables/**
+src/Output/Saves/**
+src/Preprocessor/generated_fcns/**
+# exception to the rule
+!src/Preprocessor/generated_fcns/.gitkeep 
+# keep estimated model
+!src/Output/Saves/HANK_chain.jld2
+!src/Output/Saves/HANK_mode.jld2
+!src/Output/Saves/linearresults.jld2
+!src/Output/Saves/parameter_example.jld2
+!src/Output/Saves/steadystate.jld2

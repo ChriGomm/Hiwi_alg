@@ -3,11 +3,25 @@
 #------------------------------------------------------------------------------
 # ATTENTION: make sure that your present working directory pwd() is set to the folder
 # containing script.jl and BASEforHANK.jl. Otherwise adjust the load path.
-cd("./src")
+# cd("./src")
 # push!(LOAD_PATH, pwd())
 # pre-process user inputs for model setup
+using Printf
+function printArray(a::AbstractArray)
+    for i in 1:size(a)[1]
+        for j in 1:size(a)[2]
+            if j==size(a)[2]
+                @printf("%.3f\n",a[i,j])
+            else
+                @printf("%.3f\t",a[i,j])
+            end
+        end
+    end
+end
+
+
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
@@ -237,10 +251,11 @@ for i_y in 1:n_par.ny
         cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
     end
 end
-# for i_y in 1:n_par.ny
-#     cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
-#     cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k)
-# end
+cdf_k_young_grid = NaN*ones(n_par.nm,n_par.ny)
+for i_y in 1:n_par.ny
+    cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
+    cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k)
+end
 
 cdf_m_young_grid = NaN*ones(n_par.nm,n_par.ny)
 for i_y in 1:n_par.ny
@@ -254,6 +269,79 @@ distr_initial = NaN*ones(n_par.nm+1,n_par.nk,n_par.ny)
 distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
 distr_initial[end,:,:] = cdf_k_young_grid
 
+
+
+cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
+cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
+
+cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
+cdf_k_prime_on_grid_a = similar(cdf_k_initial)
+
+
+cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
+        cdf_b_cond_k_prime_on_grid_a,
+        cdf_k_prime_on_grid_a,
+        m_a_star, 
+        k_a_star,
+        cdf_b_cond_k_initial,
+        cdf_k_initial,
+        distr_y,
+        RB,
+        RK,
+        sortingw,
+        w[sortingw],
+        w_eval_grid,
+        m_a_aux,
+        w_k,
+        w_m,
+        n_par,
+        m_par;
+        speedup = true
+    )
+
+    cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
+
+
+    DirectTransition_Splines_non_adjusters!(
+        cdf_b_cond_k_prime_on_grid_n,
+        m_n_star, 
+        cdf_b_cond_k_initial,
+        distr_y,
+        n_par,
+    )
+
+    # println("distro adj: ")
+    # printArray(cdf_b_cond_k_prime_on_grid_a[:,:,1])
+    # println("distro non-adj")
+    # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
+
+    distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
+
+    for i_y in 1:1#n_par.ny
+        distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
+        for i_k in 2:n_par.nk
+            println(i_k,(distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]))
+            
+            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
+            println("row of dist: ",m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) )
+        end
+    end
+    # println("distr_prime_on_grid[:,:,1])
+    # println("distr k")
+    # helper_fk = distr_prime_on_grid[n_par.nm+1,2:end,1]-distr_prime_on_grid[n_par.nm+1,1:end-1,1]
+    # println(cdf_b_cond_k_prime_on_grid_a)
+    n = size(distr_prime_on_grid)
+    distr_prime_on_grid .= reshape(reshape(distr_prime_on_grid, (n[1] .* n[2], n[3])) * n_par.Π, (n[1], n[2], n[3]))
+
+
+
+
+
+
+
+
+
+
 # Tolerance for change in cdf from period to period
 tol = n_par.ϵ
 # Maximum iterations to find steady state distribution
@@ -261,7 +349,8 @@ max_iter = 200
 # Init 
 distance = 9999.0
 counts = 0
-
+# println("initial distro: ")
+# printArray(distr_initial[:,:,1])
 while distance > tol && counts < max_iter
     global counts, distance, distr_initial, cdf_w
     counts = counts + 1
@@ -327,7 +416,7 @@ B = BASEforHANK.SteadyState.expected_value(sum(cdf_b,dims=2)[:],n_par.grid_m)
 # plot(n_par.grid_m,sum(cdf_b,dims=2))
 
 for i_y = 1:n_par.ny
-    for i_k = 1:60
+    for i_k = 1:7
         plot(n_par.grid_m,cdf_b_cond_k_young_grid[:,i_k,1],label="young",xlims=(0,20))
         plot!(n_par.grid_m,distr_initial[1:end-1,i_k,1]/distr_y[1],label="degm")
         vline!([m_a_aux[i_k,1]],label="m_a",linestyle=:dash)

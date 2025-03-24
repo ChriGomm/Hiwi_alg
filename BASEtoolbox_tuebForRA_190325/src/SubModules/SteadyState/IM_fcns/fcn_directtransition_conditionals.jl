@@ -256,8 +256,15 @@ function DirectTransition_Splines_adjusters!(
             nodes_k = optk_sorted[w_li:end]
             values_k = cdf_w_y[w_grid_sort][w_li:end]
         end
-        cdf_k_int = k -> k < nodes_k[1] ? 0.0 : Interpolator(nodes_k, values_k)(k) #
+        # println("nodes_k: ",i_y,nodes_k)
+        # println("values_k: ",values_k)
+        # println("cdf_wy: ",cdf_w_y)
+        # println("b_cond_k intp: ")
+        # printArray(cdf_b_cond_k_intp)
+        cdf_k_int = k -> k < nodes_k[1] ? 0.0 : (k> nodes_k[end] ? 1.0 : Interpolator(nodes_k, values_k)(k) )#
+        
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_int.(n_par.grid_k)
+        # println("cdf_k: ",cdf_k_prime_on_grid_a[:,i_y])
         k_marginal = [findfirst(m_a_aux_y .> n_par.grid_m[i_m]) for i_m in 1:n_par.nm]
         k_marginal[isnothing.(k_marginal)] .= n_par.nk
         k_marginal = [n_par.grid_k[k_marginal[i_m]] for i_m in 1:n_par.nm]
@@ -303,6 +310,9 @@ function DirectTransition_Splines_adjusters!(
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y] .* pdf_inc[i_y]
         cdf_k_prime_dep_b[:,:,i_y] .= cdf_k_prime_dep_b[:,:,i_y] .* pdf_inc[i_y]
     end
+    # println("cdf_k: ")
+    # printArray(cdf_k_prime_on_grid_a)
+    # exit()
     return cdf_w, cdf_k_prime_dep_b
 end
 

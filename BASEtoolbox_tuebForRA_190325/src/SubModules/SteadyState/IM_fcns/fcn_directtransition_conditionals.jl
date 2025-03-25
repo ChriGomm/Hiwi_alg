@@ -172,10 +172,22 @@ function DirectTransition_Splines!(
     for i_y in 1:n_par.ny
         distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
         for i_k in 2:n_par.nk
-            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
+            distr_k_finite = distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]
+            distr_k_initial_finite = cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]
+            if distr_k_finite ==0
+                distr_k_finite= 1e-16
+            end
+            if distr_k_initial_finite==0
+                distr_k_initial_finite=1e-16
+            end
+            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
         end
     end
-
+    for i_y in 1:n_par.ny
+        for i_k in 1:n_par.nk
+            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= distr_prime_on_grid[1:n_par.nm,i_k,i_y]./distr_prime_on_grid[n_par.nm,i_k,i_y]
+        end
+    end
     n = size(distr_prime_on_grid)
     distr_prime_on_grid .= reshape(reshape(distr_prime_on_grid, (n[1] .* n[2], n[3])) * Π, (n[1], n[2], n[3]))
 
@@ -240,8 +252,9 @@ function DirectTransition_Splines_adjusters!(
         optk_sorted = optk_unsorted[w_grid_sort]
         optb_sorted = optb_unsorted[w_grid_sort]
         # normalize cdf_w
-        cdf_w_y .= min.(cdf_w_y,cdfend)
-        cdf_w_y[end] = cdfend
+        # cdf_w_y .= min.(cdf_w_y,cdfend)
+        # cdf_w_y[end] = cdfend
+        cdf_w_y .= cdf_w_y./cdf_w_y[end]
         # compute spline of cdf_w
         cdf_w_y_spl = Interpolator(wgrid,cdf_w_y[w_grid_sort])
         # 2. Compute cdf over k' with DEGM
@@ -301,10 +314,11 @@ function DirectTransition_Splines_adjusters!(
             end
         end
         # normalize
-        cdf_k_prime_on_grid_a[:,i_y] .= min.(cdf_k_prime_on_grid_a[:,i_y],cdfend)
-        cdf_k_prime_on_grid_a[end,i_y] = cdfend
-        cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= min.(cdf_b_cond_k_prime_on_grid_a[:,:,i_y],cdfend)
-        cdf_b_cond_k_prime_on_grid_a[end,:,i_y] .= cdfend
+        cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y]./cdf_k_prime_on_grid_a[end,i_y]
+        # cdf_k_prime_on_grid_a[end,i_y] = cdfend
+        # cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= min.(cdf_b_cond_k_prime_on_grid_a[:,:,i_y],cdfend)
+        cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .=cdf_b_cond_k_prime_on_grid_a[:,:,i_y]./cdf_b_cond_k_prime_on_grid_a[end,:,i_y]
+        # cdf_b_cond_k_prime_on_grid_a[end,:,i_y] .= cdfend
         # 4. Times pdf(i_y)
         cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .* pdf_inc[i_y]
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y] .* pdf_inc[i_y]
@@ -351,8 +365,9 @@ function DirectTransition_Splines_non_adjusters!(
             m_to_cdf_spline_extr!(cdf_b_cond_k_given_y_k,n_par.grid_m)
             cdf_b_cond_k_given_y_k[1] = isnothing(i_mmin) ? cdf_b_cond_k_initial[1,i_k,i_y] : cdf_b_cond_k_initial[i_mmin,i_k,i_y]
             # normalize cdf_b_cond_k_given_y_k
-            cdf_b_cond_k_given_y_k .= min.(cdf_b_cond_k_given_y_k,cdfend)
-            cdf_b_cond_k_given_y_k[end] = cdfend
+            # cdf_b_cond_k_given_y_k .= min.(cdf_b_cond_k_given_y_k,cdfend)
+            # cdf_b_cond_k_given_y_k[end] = cdfend
+            cdf_b_cond_k_given_y_k .= cdf_b_cond_k_given_y_k./cdf_b_cond_k_given_y_k[end]
         end
     end
 end

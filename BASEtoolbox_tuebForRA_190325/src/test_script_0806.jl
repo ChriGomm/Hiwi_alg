@@ -175,6 +175,15 @@ cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 
 w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
 #calc sorting for wealth
+for i_b in 1:length(n_par.w_sel_m)
+    for i_k in 1:length(n_par.w_sel_k)
+        for j_k in 1:n_par.nk
+            println([i_b,i_k,j_k]," ",(RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)))
+            println(1/(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar))
+        end
+    end
+end
+# println("w_evalgrid: ",w_eval_grid)
 w = NaN*ones(length(n_par.w_sel_m)*length(n_par.w_sel_k))
 for (i_w_b,i_b) in enumerate(n_par.w_sel_m)
     for (i_w_k,i_k) in enumerate(n_par.w_sel_k)
@@ -323,7 +332,7 @@ cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
             println(i_k,(distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]))
             
             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
-            println("row of dist: ",m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) )
+            # println("row of dist: ",m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) )
         end
     end
     # println("distr_prime_on_grid[:,:,1])
@@ -345,9 +354,9 @@ cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
 # Tolerance for change in cdf from period to period
 tol = n_par.ϵ
 # Maximum iterations to find steady state distribution
-max_iter = 200
+max_iter = 400
 # Init 
-distance = 9999.0
+distance = 9999.0 
 counts = 0
 # println("initial distro: ")
 # printArray(distr_initial[:,:,1])
@@ -383,7 +392,7 @@ while distance > tol && counts < max_iter
     println("$counts - distance: $distance")
 
     # mix in young marginal k distribution
-    distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
+    # distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
 
 end
 
@@ -416,7 +425,7 @@ B = BASEforHANK.SteadyState.expected_value(sum(cdf_b,dims=2)[:],n_par.grid_m)
 # plot(n_par.grid_m,sum(cdf_b,dims=2))
 
 for i_y = 1:n_par.ny
-    for i_k = 1:7
+    for i_k = 1:10
         plot(n_par.grid_m,cdf_b_cond_k_young_grid[:,i_k,1],label="young",xlims=(0,20))
         plot!(n_par.grid_m,distr_initial[1:end-1,i_k,1]/distr_y[1],label="degm")
         vline!([m_a_aux[i_k,1]],label="m_a",linestyle=:dash)

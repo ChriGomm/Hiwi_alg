@@ -141,11 +141,11 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
     # Numerical Parameters to be set in advance
     m_par::ModelParameters = ModelParameters()
     ny::Int = 4     # ngrid income (4 is the coarse grid used initially in finding the StE)
-    nk::Int = 24      # ngrid illiquid assets (capital) (10 is the coarse grid used initially in finding the StE)
-    nm::Int = 24      # ngrid liquid assets (bonds) (10 is the coarse grid used initially in finding the StE)
+    nk::Int = 100      # ngrid illiquid assets (capital) (10 is the coarse grid used initially in finding the StE)
+    nm::Int = 100      # ngrid liquid assets (bonds) (10 is the coarse grid used initially in finding the StE)
     ny_copula::Int = 4  # ngrid for copula in income (rule of thumb: divide ny, w/o entrepreneur, by two)
-    nk_copula::Int = 2   # ngrid for copula in illiquid assets (capital, rule of thumb: divide nk by twelve)
-    nm_copula::Int = 2  # ngrid for copula in liquid assets (bonds, rule of thumb: divide nm by twelve)
+    nk_copula::Int = 10   # ngrid for copula in illiquid assets (capital, rule of thumb: divide nk by twelve)
+    nm_copula::Int = 10  # ngrid for copula in liquid assets (bonds, rule of thumb: divide nm by twelve)
     w_sel_k::Vector{Int} = collect(1:5:nk) # select every *?* gridpoint
     w_sel_m::Vector{Int} = collect(1:5:nm) # select every *?* gridpoint
     kmin::Float64 = 0.0       # gridmin capital

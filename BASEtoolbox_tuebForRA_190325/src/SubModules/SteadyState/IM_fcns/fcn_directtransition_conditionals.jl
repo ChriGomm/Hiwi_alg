@@ -183,14 +183,27 @@ function DirectTransition_Splines!(
             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
         end
     end
+    # println("distr_bcondk prior normalisation: ")
+    # printArray(distr_prime_on_grid[:,:,1])
     for i_y in 1:n_par.ny
-        for i_k in 1:n_par.nk
-            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= distr_prime_on_grid[1:n_par.nm,i_k,i_y]./distr_prime_on_grid[n_par.nm,i_k,i_y]
-        end
+        
+            distr_prime_on_grid[:,:,i_y] .= distr_prime_on_grid[:,:,i_y].*pdf_inc[i_y]
+        
     end
+    
     n = size(distr_prime_on_grid)
     distr_prime_on_grid .= reshape(reshape(distr_prime_on_grid, (n[1] .* n[2], n[3])) * Π, (n[1], n[2], n[3]))
 
+    
+    for i_k in 1:n_par.nk
+        distr_prime_on_grid[1:n_par.nm,i_k,:] .= distr_prime_on_grid[1:n_par.nm,i_k,:]./sum(distr_prime_on_grid[n_par.nm,i_k,:])
+    end
+  
+    distr_prime_on_grid[n_par.nm+1,:,:] .= distr_prime_on_grid[n_par.nm+1,:,:]./sum(distr_prime_on_grid[n_par.nm+1,end,:])
+    
+
+    # println("distr_bcondk at end: ")
+    # printArray(distr_prime_on_grid[:,:,1])
     return cdf_w
 
 end
@@ -320,9 +333,9 @@ function DirectTransition_Splines_adjusters!(
         cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .=cdf_b_cond_k_prime_on_grid_a[:,:,i_y]./cdf_b_cond_k_prime_on_grid_a[end,:,i_y]
         # cdf_b_cond_k_prime_on_grid_a[end,:,i_y] .= cdfend
         # 4. Times pdf(i_y)
-        cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .* pdf_inc[i_y]
-        cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y] .* pdf_inc[i_y]
-        cdf_k_prime_dep_b[:,:,i_y] .= cdf_k_prime_dep_b[:,:,i_y] .* pdf_inc[i_y]
+        # cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .* pdf_inc[i_y]
+        # cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y] .* pdf_inc[i_y]
+        # cdf_k_prime_dep_b[:,:,i_y] .= cdf_k_prime_dep_b[:,:,i_y] .* pdf_inc[i_y]
     end
     # println("cdf_k: ")
     # printArray(cdf_k_prime_on_grid_a)

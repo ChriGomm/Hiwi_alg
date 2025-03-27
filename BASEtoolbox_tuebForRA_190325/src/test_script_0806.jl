@@ -19,6 +19,29 @@ function printArray(a::AbstractArray)
     end
 end
 
+function saveArray(filename::String,a::AbstractArray)
+    dim = size(a)
+    println("$dim")
+    open(filename,"w") do file
+    if length(dim)==1
+        for i in 1:dim[1]
+            write(file,"$(@sprintf("%.5f;\n",a[i]))")
+        end
+    elseif length(dim)==2
+        for i in 1:dim[1]
+            for j in 1:dim[2]
+                write(file,"$(@sprintf("%.5f;",a[i,j]))")
+                if j==dim[2]
+                    write(file,"\n")
+                else
+                    write(file,"\t")
+                end
+            end
+        end
+    end
+    end
+end
+
 
 include("Preprocessor/PreprocessInputs.jl")
 # include("BASEforHANK.jl")
@@ -28,6 +51,7 @@ using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Pl
 # prevents BLAS from grabbing all threads on a machine
 BASEforHANK.LinearAlgebra.BLAS.set_num_threads(Threads.nthreads())
 
+   
 #------------------------------------------------------------------------------
 # initialize parameters to priors to select coefficients of DCTs of Vm, Vk]
 # that are retained 
@@ -399,7 +423,8 @@ end
 println("Distribution Iterations: ", counts)
 println("Distribution Dist: ", distance)
 
-
+println("final distr: ")
+printArray(distr_initial[:,:,1])
 K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k)
 struct ssStruc
     distrSS

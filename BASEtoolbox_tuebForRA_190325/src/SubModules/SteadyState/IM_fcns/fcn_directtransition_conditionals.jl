@@ -228,6 +228,10 @@ function DirectTransition_Splines_adjusters!(
     m_par::ModelParameters;
     speedup::Bool = true
 )   
+# why divide through pdf_y
+# why use pdf_y in place of pdf_inc
+# what is w_k
+
     cdf_w = NaN*ones(eltype(cdf_k_initial),length(n_par.w_sel_k)*length(n_par.w_sel_m), n_par.ny)
     cdfend = 1.0
     cdf_k_prime_dep_b = zeros(n_par.nm,n_par.nk,n_par.ny)
@@ -249,14 +253,17 @@ function DirectTransition_Splines_adjusters!(
                     n_par.grid_m,
                     cdf_b_cond_k_initial[:,i_k,i_y]./pdf_y
                 )(b))
+                # cdf of b(w,k) conditional on k
                 cdf_b_cond_k_intp[i_k,:] = intp_cond.(reshape(w_eval_grid[:,:,i_k],length(n_par.w_sel_k)*length(n_par.w_sel_m)))
                 
             end      
-        end             
+        end  
+        # ?           
         cdf_b_cond_k_intp[1,1] = cdf_b_cond_k_initial[1,1,i_y]./pdf_y     
         diffcdfk = diff(cdf_k_initial[:,i_y],dims=1)/pdf_y
         for i_w_b = 1:length(n_par.w_sel_m)
             for i_w_k = 1:length(n_par.w_sel_k)
+                # calculate cdf for w unsortedly
                 cdf_w_y[i_w_b + (i_w_k-1)*length(n_par.w_sel_m)] = cdf_k_initial[1,i_y]*cdf_b_cond_k_intp[1,i_w_b+(i_w_k-1)*length(n_par.w_sel_m)]/pdf_y + .5*sum((cdf_b_cond_k_intp[2:end,i_w_b+(i_w_k-1)*length(n_par.w_sel_m)] .+ cdf_b_cond_k_intp[1:end-1,i_w_b+(i_w_k-1)*length(n_par.w_sel_m)]).*diffcdfk)
             end
         end
@@ -268,13 +275,14 @@ function DirectTransition_Splines_adjusters!(
         # cdf_w_y .= min.(cdf_w_y,cdfend)
         # cdf_w_y[end] = cdfend
         cdf_w_y .= cdf_w_y./cdf_w_y[end]
-        # compute spline of cdf_w
+        # compute spline of cdf_w on sorted grid for sorted cdf values
         cdf_w_y_spl = Interpolator(wgrid,cdf_w_y[w_grid_sort])
         # 2. Compute cdf over k' with DEGM
         if isnan(w_k[i_y]) | (w_k[i_y] < wgrid[1]) # k=0 is zero probability event
             nodes_k = optk_sorted
             values_k = cdf_w_y[w_grid_sort]
         else
+            # ?
             w_li = locate(w_k[i_y],wgrid)
             # make sure that k*=0 is included
             w_li2 = findlast(optk_sorted .== n_par.grid_k[1])

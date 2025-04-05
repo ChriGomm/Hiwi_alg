@@ -156,6 +156,14 @@ function DirectTransition_Splines!(
         m_par;
         speedup = speedup
     )
+    # println("cdf k prime deb b: ")
+    # printArray(cdf_k_prime_dep_b[:,:,1])
+    # println("cdf k: ")
+    # printArray(cdf_k_prime_on_grid_a)
+    # println("cdf b cond k")
+    # printArray(cdf_b_cond_k_prime_on_grid_a[:,:,1])
+    println("cdf w: ")
+    printArray(cdf_w)
 
     cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
 
@@ -166,6 +174,9 @@ function DirectTransition_Splines!(
         pdf_inc,
         n_par,
     )
+
+    # println("cdf b cond prime n")
+    # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
 
     distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
 
@@ -183,6 +194,7 @@ function DirectTransition_Splines!(
             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
         end
     end
+    println("")
     # println("distr_bcondk prior normalisation: ")
     # printArray(distr_prime_on_grid[:,:,1])
     for i_y in 1:n_par.ny
@@ -228,9 +240,9 @@ function DirectTransition_Splines_adjusters!(
     m_par::ModelParameters;
     speedup::Bool = true
 )   
-# why divide through pdf_y
+# why calculate old cdf_w
 # why use pdf_y in place of pdf_inc
-# what is w_k
+
 
     cdf_w = NaN*ones(eltype(cdf_k_initial),length(n_par.w_sel_k)*length(n_par.w_sel_m), n_par.ny)
     cdfend = 1.0
@@ -260,6 +272,11 @@ function DirectTransition_Splines_adjusters!(
         end  
         # ?           
         cdf_b_cond_k_intp[1,1] = cdf_b_cond_k_initial[1,1,i_y]./pdf_y     
+
+        
+        
+
+
         diffcdfk = diff(cdf_k_initial[:,i_y],dims=1)/pdf_y
         for i_w_b = 1:length(n_par.w_sel_m)
             for i_w_k = 1:length(n_par.w_sel_k)
@@ -274,27 +291,33 @@ function DirectTransition_Splines_adjusters!(
         # normalize cdf_w
         # cdf_w_y .= min.(cdf_w_y,cdfend)
         # cdf_w_y[end] = cdfend
+        println("cdf_w_y: ")
+        println(cdf_w_y[w_grid_sort])
+        cdf_w_y = cdf_w_y[w_grid_sort]
+
         cdf_w_y .= cdf_w_y./cdf_w_y[end]
         # compute spline of cdf_w on sorted grid for sorted cdf values
-        cdf_w_y_spl = Interpolator(wgrid,cdf_w_y[w_grid_sort])
+        cdf_w_y_spl = Interpolator(wgrid,cdf_w_y)
         # 2. Compute cdf over k' with DEGM
         if isnan(w_k[i_y]) | (w_k[i_y] < wgrid[1]) # k=0 is zero probability event
+            println("k=0 is zero prob event")
             nodes_k = optk_sorted
-            values_k = cdf_w_y[w_grid_sort]
+            values_k = cdf_w_y
         else
+            println("not zero prob event")
             # ?
             w_li = locate(w_k[i_y],wgrid)
             # make sure that k*=0 is included
             w_li2 = findlast(optk_sorted .== n_par.grid_k[1])
             w_li = min(w_li,w_li2)
             nodes_k = optk_sorted[w_li:end]
-            values_k = cdf_w_y[w_grid_sort][w_li:end]
+            values_k = cdf_w_y[w_li:end]
         end
         # println("nodes_k: ",i_y,nodes_k)
         # println("values_k: ",values_k)
         # println("cdf_wy: ",cdf_w_y)
-        # println("b_cond_k intp: ")
-        # printArray(cdf_b_cond_k_intp)
+        println("b_cond_k intp: ")
+        printArray(cdf_b_cond_k_intp[:,w_grid_sort])
         cdf_k_int = k -> k < nodes_k[1] ? 0.0 : (k> nodes_k[end] ? 1.0 : Interpolator(nodes_k, values_k)(k) )#
         
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_int.(n_par.grid_k)
@@ -326,7 +349,7 @@ function DirectTransition_Splines_adjusters!(
             nodes2 = optb_sorted[max(i_wb-1,i_wk)+1:end]
             values2 = ones(length(nodes2))
             nodes1 = optb_sorted[i_wb:i_wk]
-            values1 = (cdf_w_y[w_grid_sort][i_wb:i_wk]./cdf_k_prime_on_grid_a[1,i_y])
+            values1 = (cdf_w_y[i_wb:i_wk]./cdf_k_prime_on_grid_a[1,i_y])
 
             cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? (1 - (nodes1[1] - b)/(nodes1[1]-n_par.grid_m[1]))*values1[1] : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
             cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .= cdf_b_cond_k_prime_int.(n_par.grid_m)
@@ -344,6 +367,8 @@ function DirectTransition_Splines_adjusters!(
         # cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .* pdf_inc[i_y]
         # cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y] .* pdf_inc[i_y]
         # cdf_k_prime_dep_b[:,:,i_y] .= cdf_k_prime_dep_b[:,:,i_y] .* pdf_inc[i_y]
+        cdf_w_y .*= NaN
+        
     end
     # println("cdf_k: ")
     # printArray(cdf_k_prime_on_grid_a)

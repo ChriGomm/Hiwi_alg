@@ -3,17 +3,55 @@
 #------------------------------------------------------------------------------
 # ATTENTION: make sure that your present working directory pwd() is set to the folder
 # containing script.jl and BASEforHANK.jl. Otherwise adjust the load path.
-cd("./src")
+# cd("./src")
 # push!(LOAD_PATH, pwd())
 # pre-process user inputs for model setup
+using Printf
+function printArray(a::AbstractArray)
+    for i in 1:size(a)[1]
+        for j in 1:size(a)[2]
+            if j==size(a)[2]
+                @printf("%.3f\n",a[i,j])
+            else
+                @printf("%.3f\t",a[i,j])
+            end
+        end
+    end
+end
+
+function saveArray(filename::String,a::AbstractArray)
+    dim = size(a)
+    println("$dim")
+    open(filename,"w") do file
+    if length(dim)==1
+        for i in 1:dim[1]
+            write(file,"$(@sprintf("%.5f;\n",a[i]))")
+        end
+    elseif length(dim)==2
+        for i in 1:dim[1]
+            for j in 1:dim[2]
+                write(file,"$(@sprintf("%.5f;",a[i,j]))")
+                if j==dim[2]
+                    write(file,"\n")
+                else
+                    write(file,"\t")
+                end
+            end
+        end
+    end
+    end
+end
+
+
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
-using BenchmarkTools, Revise, LinearAlgebra
+using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
 # prevents BLAS from grabbing all threads on a machine
 BASEforHANK.LinearAlgebra.BLAS.set_num_threads(Threads.nthreads())
 
+   
 #------------------------------------------------------------------------------
 # initialize parameters to priors to select coefficients of DCTs of Vm, Vk]
 # that are retained 
@@ -24,25 +62,11 @@ e_set = BASEforHANK.e_set;
 BASEforHANK.Random.seed!(e_set.seed)
 
 # Calculate Steady State at prior mode 
-println("Calculating the steady state")
-# ss_full_young = call_find_steadystate(m_par)
-# jldsave("Output/Saves/steadystate_young.jld2", true; ss_full_young) # true enables compression
-@load "Output/Saves/steadystate_young.jld2" ss_full_young
+# println("Calculating the steady state")
+# KSS, VmSS, VkSS, distrSS, n_par, m_par = BASEforHANK.find_steadystate_splines(m_par)
 
-Vm_guess = ss_full_young.VmSS;
-Vk_guess = ss_full_young.VkSS;
-CDF_guess = ss_full_young.CDFSS;
-K_guess = ss_full_young.KSS;
-
-# Vm_guess = ss_full_splines.VmSS;
-# Vk_guess = ss_full_splines.VkSS;
-# CDF_guess = ss_full_splines.CDFSS;
-# K_guess = ss_full_splines.KSS;
-
-
-# -----------------------------------------------
-
-
+# ss_full_splines = BASEforHANK.SteadyStateStruct(KSS, VmSS, VkSS, CDFSS, n_par)
+# jldsave("Output/Saves/steadystate_splines.jld2", true; ss_full_splines) 
 
 # find_steadystate_splines -----------------------------
 
@@ -57,6 +81,9 @@ n_par = NumericalParameters(
     )
 
 # Kdiff ---------------------
+
+K_guess = 25.0018
+
 Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transitions
     distr_y = Paux[1, :]            # stationary income distribution
     N = BASEforHANK.IncomesETC.employment(K_guess, 1.0 ./ (m_par.μ * m_par.μw), m_par)
@@ -100,48 +127,220 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
     # Initialize policy function (guess/stored values)
     #----------------------------------------------------------------------------
 
-    # # initial guess consumption and marginal values (if not set)
-    # if initial
-    #     c_guess =
-    #         inc[1] .+ inc[2] .* (n_par.mesh_k .* r .> 0) .+ inc[3] .* (n_par.mesh_m .> 0)
-    #     if any(any(c_guess .< 0.0))
-    #         @warn "negative consumption guess"
-    #     end
-    #     Vm = eff_int .* mutil(c_guess, m_par)
-    #     Vk = (r + m_par.λ) .* mutil(c_guess, m_par)
-    #     CDF = n_par.CDF_guess
-    # else
-        Vm = Vm_guess
-        Vk = Vk_guess
-        CDF = CDF_guess
-    # end
-    #----------------------------------------------------------------------------
-    # Calculate supply of funds for given prices
-    #----------------------------------------------------------------------------
-    # KS = Ksupply(m_par.RB, r, n_par, m_par, Vm, Vk, CDF, inc, eff_int)
+    # Vm = Vm_guess
+    # Vk = Vk_guess
+    # # CDF = CDF_guess
+    # # CDF = n_par.CDF_guess
+
+    c_guess =
+        inc[1] .+ inc[2] .* (n_par.mesh_k .* r .> 0) .+ inc[3] .* (n_par.mesh_m .> 0)
+    if any(any(c_guess .< 0.0))
+        @warn "negative consumption guess"
+    end
+    Vm = eff_int .* BASEforHANK.IncomesETC.mutil(c_guess, m_par)
+    Vk = (r + m_par.λ) .* BASEforHANK.IncomesETC.mutil(c_guess, m_par)
+    
 
 
-# Ksupply ------------------------
+    RB_guess = m_par.RB
+    RB = RB_guess
+    R_guess = r
+    RK = R_guess
 
-RB_guess = m_par.RB
-R_guess = r
-
-c_a_star, m_a_star, k_a_star, c_n_star, m_n_star, Vm, Vk = BASEforHANK.SteadyState.find_ss_policies(
-        Vm,
-        Vk,
-        inc,
-        eff_int,
-        n_par,
-        m_par,
-        RB_guess,
-        R_guess,
-    )
+    c_a_star, m_a_star, k_a_star, c_n_star, m_n_star, Vm, Vk, m_a_aux, w_bar, aux_c = BASEforHANK.SteadyState.find_ss_policies(
+            Vm,
+            Vk,
+            inc,
+            eff_int,
+            n_par,
+            m_par,
+            RB_guess,
+            R_guess,
+        )
+    i_l, w_r = BASEforHANK.SteadyState.MakeWeightsLight(m_a_aux[1,:],n_par.grid_m) 
+    w_k = ones(n_par.ny)
+    for i_y in 1:n_par.ny
+        if isempty(w_bar[i_y])
+            w_k[i_y] = NaN
+        else
+            w_k[i_y] = w_bar[i_y][end] + w_r[i_y]*(n_par.grid_m[i_l[i_y]+1]+aux_c[i_l[i_y]+1,1]-(n_par.grid_m[i_l[i_y]]+aux_c[i_l[i_y],1]))
+        end
+    end
+    w_m = [isempty(w_bar[i_y]) ? NaN : w_bar[i_y][1] for i_y in 1:n_par.ny]
 
 # find_ss_distribution_splines --------------------------
 # DirectTransitionSplines(
 
-cdf_prime = zeros(eltype(CDF_guess), size(CDF_guess))
-cdf_initial = copy(CDF_guess)
+path_to_transition = "SubModules/SteadyState/IM_fcns/fcn_directtransition_conditionals.jl"
+locate = BASEforHANK.Tools.locate
+mylinearinterpolate = BASEforHANK.Tools.mylinearinterpolate
+mylinearcondcdf = BASEforHANK.Tools.mylinearcondcdf
+include(path_to_transition)
+
+pdf_b_cond_k = ones(n_par.nm, n_par.nk, n_par.ny) / sum(n_par.nm * n_par.ny)
+cdf_b_cond_k = cumsum(pdf_b_cond_k, dims=1)
+cdf_k = cumsum(pdf_b_cond_k[1,:,:], dims=1)
+
+for i_y = 1:n_par.ny
+    cdf_b_cond_k[:,:,i_y] = distr_y[i_y].*cdf_b_cond_k[:,:,i_y] ./ cdf_b_cond_k[end,:,i_y]
+    cdf_k[:,i_y] = distr_y[i_y].*cdf_k[:,i_y] ./ cdf_k[end,i_y]
+end
 
 
-w_mesh = 
+cdf_b_cond_k_initial = copy(cdf_b_cond_k);
+cdf_k_initial = copy(cdf_k);
+
+
+cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
+cdf_k_prime_on_grid_a = similar(cdf_k_initial)
+
+# k_a_prime = k_a_star
+# m_a_prime = m_a_star
+
+w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar)*((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=n_par.grid_k[j_k]) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
+# w_vals = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k) ]
+#calc sorting for wealth
+# for i_b in 1:length(n_par.w_sel_m)
+#     for i_k in 1:length(n_par.w_sel_k)
+#         for j_k in 1:n_par.nk
+#             println([i_b,i_k,j_k]," ",(RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)))
+#             println(1/(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar))
+#         end
+#     end
+# end
+# println("w_evalgrid: ",w_eval_grid)
+w = NaN*ones(length(n_par.w_sel_m)*length(n_par.w_sel_k))
+for (i_w_b,i_b) in enumerate(n_par.w_sel_m)
+    for (i_w_k,i_k) in enumerate(n_par.w_sel_k)
+        w[i_w_b + length(n_par.w_sel_m)*(i_w_k-1)] = RB .* n_par.grid_m[i_b] .+ RK .* n_par.grid_k[i_k] .+ m_par.Rbar .* n_par.grid_m[i_b] .* (n_par.grid_m[i_b] .< 0)
+    end
+end
+sortingw = sortperm(w)
+
+@load "Output/Saves/young250x250.jld2" ss_full_young
+pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.nk,ss_full_young.n_par.ny)
+cdf_k_young = cumsum(pdf_k_young,dims=1)
+cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
+
+
+using PCHIPInterpolation
+include(path_to_transition)
+
+cdf_k_young_grid = cdf_k_young #similar(cdf_k_young)
+cdf_b_cond_k_young = NaN*ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
+cdf_b_cond_k_young_grid = similar(cdf_b_cond_k_initial)
+for i_y in 1:n_par.ny
+    for i_k in 1:n_par.nk
+        cdf_b_cond_k_young[:,i_k,i_y] = cumsum(ss_full_young.distrSS[:,i_k,i_y],dims=1)/pdf_k_young[i_k,i_y]
+        cdf_b_cond_k_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,i_k,i_y])
+        cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
+    end
+end
+cdf_k_young_grid = NaN*ones(n_par.nm,n_par.ny)
+for i_y in 1:n_par.ny
+    cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
+    cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k)
+end
+
+cdf_m_young_grid = NaN*ones(n_par.nm,n_par.ny)
+for i_y in 1:n_par.ny
+    cdf_m_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_m_young[:,i_y])
+    cdf_m_young_grid[:,i_y] = cdf_m_young_itp.(n_par.grid_m)
+end
+
+
+# cdf_prime = zeros(size(cdf_guess))
+distr_initial = NaN*ones(n_par.nm+1,n_par.nk,n_par.ny)
+distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
+distr_initial[end,:,:] = cdf_k_young_grid
+
+
+
+
+
+
+
+# Tolerance for change in cdf from period to period
+tol = n_par.ϵ
+# Maximum iterations to find steady state distribution
+max_iter = 1
+# Init 
+distance = 9999.0 
+counts = 0
+println("initial distro: ")
+printArray(distr_initial[:,:,1])
+while distance > tol && counts < max_iter
+    global counts, distance, distr_initial, cdf_w
+    counts = counts + 1
+    distr_old = copy(distr_initial)
+
+    cdf_w = DirectTransition_Splines!(
+        distr_initial,
+        m_n_star,
+        m_a_star,
+        k_a_star,
+        copy(distr_initial),
+        n_par.Π,
+        distr_y,
+        RB,
+        RK,
+        w_eval_grid,
+        sortingw,
+        w[sortingw],
+        m_a_aux,
+        w_k,
+        w_m,
+        n_par,
+        m_par;
+        speedup = true
+        )
+
+    difference = distr_old .- distr_initial
+    distance = maximum(abs, difference)
+
+    println("$counts - distance: $distance")
+
+    # mix in young marginal k distribution
+    # distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
+
+end
+
+println("Distribution Iterations: ", counts)
+println("Distribution Dist: ", distance)
+
+println("final distr: ")
+printArray(distr_initial[:,:,1])
+K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k)
+struct ssStruc
+    distrSS
+    n_par
+    KSS
+end
+ss = ssStruc(distr_initial,n_par,K)
+jldsave("Output/Saves/ssKfixed_250x2500.jld2", true; ss)
+
+# compute marginal cdf of b
+cdf_b = NaN*ones(n_par.nm,n_par.ny)
+for i_y in 1:n_par.ny
+    diffcdfk = diff(distr_initial[end,:,i_y],dims=1)/distr_initial[end,end,i_y]
+    for i_b = 1:n_par.nm
+        for i_k = 1:n_par.nk
+            cdf_b[i_b,i_y] = distr_initial[end,1,i_y]/distr_initial[end,end,i_y]*distr_initial[i_b,1,i_y] + .5*sum((distr_initial[i_b,2:end,i_y] .+ distr_initial[i_b,1:end-1,i_y]).*diffcdfk)
+        end
+    end
+end
+
+B = BASEforHANK.SteadyState.expected_value(sum(cdf_b,dims=2)[:],n_par.grid_m)
+# plot(n_par.grid_k,sum(distr_initial[end,:,:],dims=2))
+# plot(n_par.grid_m,sum(cdf_b,dims=2))
+
+for i_y = 1:n_par.ny
+    for i_k = 1:10
+        plot(n_par.grid_m,cdf_b_cond_k_young_grid[:,i_k,1],label="young",xlims=(0,20))
+        plot!(n_par.grid_m,distr_initial[1:end-1,i_k,1]/distr_y[1],label="degm")
+        vline!([m_a_aux[i_k,1]],label="m_a",linestyle=:dash)
+        i_n = findfirst(m_n_star[:,2,1] .> m_a_aux[2,1])
+        vline!([n_par.grid_m[i_n]],label="m_n^{-1}(m_a)",linestyle=:dash)
+        savefig(string("Output/Figures/comp_cdf_b_k$i_k","_$i_y.pdf"))
+    end
+end

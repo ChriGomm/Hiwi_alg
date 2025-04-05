@@ -197,17 +197,27 @@ cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 # k_a_prime = k_a_star
 # m_a_prime = m_a_star
 
-w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
+w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar)*((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k[j_k])) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
 #calc sorting for wealth
-for i_b in 1:length(n_par.w_sel_m)
-    for i_k in 1:length(n_par.w_sel_k)
-        for j_k in 1:n_par.nk
-            println([i_b,i_k,j_k]," ",(RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)))
-            println(1/(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar))
-        end
+# for i_b in 1:length(n_par.w_sel_m)
+#     for i_k in 1:length(n_par.w_sel_k)
+#         for j_k in 1:n_par.nk
+#             println([i_b,i_k,j_k]," ",(RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)))
+#             println(1/(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar))
+#         end
+#     end
+# end
+# println("w_evalgrid: ",w_eval_grid)
+
+w_test = Array{Float64,2}(undef,length(n_par.w_sel_k)*length(n_par.w_sel_m),n_par.nk)
+for ib in 1:length(n_par.w_sel_m)
+    for ik in 1:length(n_par.w_sel_k)
+        w_test[ib + length(n_par.w_sel_m)*(ik-1),:]= w_eval_grid[ib,ik,:]
     end
 end
-# println("w_evalgrid: ",w_eval_grid)
+
+test = [i*j*l for i in ["1","2","3"], j in ["1","2","3"], l in ["1","2","3"]]
+
 w = NaN*ones(length(n_par.w_sel_m)*length(n_par.w_sel_k))
 for (i_w_b,i_b) in enumerate(n_par.w_sel_m)
     for (i_w_k,i_k) in enumerate(n_par.w_sel_k)
@@ -221,51 +231,51 @@ pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.n
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
 
-@timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
-    cdf_b_cond_k_prime_on_grid_a,
-    cdf_k_prime_on_grid_a,
-    m_a_star, 
-    k_a_star,
-    cdf_b_cond_k_initial,
-    cdf_k_initial,
-    distr_y,
-    RB,
-    RK,
-    sortingw,
-    w[sortingw],
-    w_eval_grid,
-    m_a_aux,
-    w_k,
-    w_m,
-    n_par,
-    m_par;
-    speedup = true
-)
+# @timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
+#     cdf_b_cond_k_prime_on_grid_a,
+#     cdf_k_prime_on_grid_a,
+#     m_a_star, 
+#     k_a_star,
+#     cdf_b_cond_k_initial,
+#     cdf_k_initial,
+#     distr_y,
+#     RB,
+#     RK,
+#     sortingw,
+#     w[sortingw],
+#     w_eval_grid,
+#     m_a_aux,
+#     w_k,
+#     w_m,
+#     n_par,
+#     m_par;
+#     speedup = true
+# )
 
-cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
+# cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
 
-# include(path_to_transition)
+# # include(path_to_transition)
 
-@timev DirectTransition_Splines_non_adjusters!(
-    cdf_b_cond_k_prime_on_grid_n,
-    m_n_star, 
-    cdf_b_cond_k_initial,
-    distr_y,
-    n_par,
-)
+# @timev DirectTransition_Splines_non_adjusters!(
+#     cdf_b_cond_k_prime_on_grid_n,
+#     m_n_star, 
+#     cdf_b_cond_k_initial,
+#     distr_y,
+#     n_par,
+# )
 
-cdf_b_cond_k_prime_on_grid = m_par.λ .* cdf_b_cond_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n
-cdf_k_prime_on_grid = m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
+# cdf_b_cond_k_prime_on_grid = m_par.λ .* cdf_b_cond_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n
+# cdf_k_prime_on_grid = m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
 
-# TEST
-distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
-distr_prime_on_grid[n_par.nm+1,:,:] .= cdf_k_prime_on_grid
-for i_y in 1:n_par.ny
-    distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
-    for i_k in 2:n_par.nk
-        distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
-    end
-end
+# # TEST
+# distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
+# distr_prime_on_grid[n_par.nm+1,:,:] .= cdf_k_prime_on_grid
+# for i_y in 1:n_par.ny
+#     distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
+#     for i_k in 2:n_par.nk
+#         distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
+#     end
+# end
 
 # m_n_star[:, 127, i_y] .+ n_par.grid_k[127]
 # findlast(m_n_star[:, 127, i_y] .+ n_par.grid_k[127] .== n_par.grid_m[1] + n_par.grid_k[127])
@@ -304,67 +314,67 @@ distr_initial[end,:,:] = cdf_k_young_grid
 
 
 
-cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
-cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
+# cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
+# cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
 
-cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
-cdf_k_prime_on_grid_a = similar(cdf_k_initial)
-
-
-cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
-        cdf_b_cond_k_prime_on_grid_a,
-        cdf_k_prime_on_grid_a,
-        m_a_star, 
-        k_a_star,
-        cdf_b_cond_k_initial,
-        cdf_k_initial,
-        distr_y,
-        RB,
-        RK,
-        sortingw,
-        w[sortingw],
-        w_eval_grid,
-        m_a_aux,
-        w_k,
-        w_m,
-        n_par,
-        m_par;
-        speedup = true
-    )
-
-    cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
+# cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
+# cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 
 
-    DirectTransition_Splines_non_adjusters!(
-        cdf_b_cond_k_prime_on_grid_n,
-        m_n_star, 
-        cdf_b_cond_k_initial,
-        distr_y,
-        n_par,
-    )
+# cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
+#         cdf_b_cond_k_prime_on_grid_a,
+#         cdf_k_prime_on_grid_a,
+#         m_a_star, 
+#         k_a_star,
+#         cdf_b_cond_k_initial,
+#         cdf_k_initial,
+#         distr_y,
+#         RB,
+#         RK,
+#         sortingw,
+#         w[sortingw],
+#         w_eval_grid,
+#         m_a_aux,
+#         w_k,
+#         w_m,
+#         n_par,
+#         m_par;
+#         speedup = true
+#     )
+
+#     cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
+
+
+#     DirectTransition_Splines_non_adjusters!(
+#         cdf_b_cond_k_prime_on_grid_n,
+#         m_n_star, 
+#         cdf_b_cond_k_initial,
+#         distr_y,
+#         n_par,
+#     )
 
     # println("distro adj: ")
     # printArray(cdf_b_cond_k_prime_on_grid_a[:,:,1])
     # println("distro non-adj")
     # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
 
-    distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
+    # distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
 
-    for i_y in 1:1#n_par.ny
-        distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
-        for i_k in 2:n_par.nk
-            println(i_k,(distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]))
+    # for i_y in 1:1#n_par.ny
+    #     distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
+    #     for i_k in 2:n_par.nk
+    #         # println(i_k,(distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]))
             
-            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
-            # println("row of dist: ",m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) )
-        end
-    end
+    #         distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
+    #         # println("row of dist: ",m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) )
+    #     end
+    # end
     # println("distr_prime_on_grid[:,:,1])
     # println("distr k")
     # helper_fk = distr_prime_on_grid[n_par.nm+1,2:end,1]-distr_prime_on_grid[n_par.nm+1,1:end-1,1]
     # println(cdf_b_cond_k_prime_on_grid_a)
-    n = size(distr_prime_on_grid)
-    distr_prime_on_grid .= reshape(reshape(distr_prime_on_grid, (n[1] .* n[2], n[3])) * n_par.Π, (n[1], n[2], n[3]))
+    # n = size(distr_prime_on_grid)
+    # distr_prime_on_grid .= reshape(reshape(distr_prime_on_grid, (n[1] .* n[2], n[3])) * n_par.Π, (n[1], n[2], n[3]))
 
 
 
@@ -378,12 +388,12 @@ cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
 # Tolerance for change in cdf from period to period
 tol = n_par.ϵ
 # Maximum iterations to find steady state distribution
-max_iter = 400
+max_iter = 1
 # Init 
 distance = 9999.0 
 counts = 0
-# println("initial distro: ")
-# printArray(distr_initial[:,:,1])
+println("initial distro: ")
+printArray(distr_initial[:,:,1])
 while distance > tol && counts < max_iter
     global counts, distance, distr_initial, cdf_w
     counts = counts + 1

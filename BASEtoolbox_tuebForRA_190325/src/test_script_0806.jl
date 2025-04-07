@@ -388,18 +388,18 @@ distr_initial[end,:,:] = cdf_k_young_grid
 # Tolerance for change in cdf from period to period
 tol = n_par.ϵ
 # Maximum iterations to find steady state distribution
-max_iter = 1
+max_iter = 200
 # Init 
 distance = 9999.0 
 counts = 0
-println("initial distro: ")
-printArray(distr_initial[:,:,1])
+# println("initial distro: ")
+# printArray(distr_initial[:,:,1])
 while distance > tol && counts < max_iter
     global counts, distance, distr_initial, cdf_w
     counts = counts + 1
     distr_old = copy(distr_initial)
 
-    cdf_w = DirectTransition_Splines!(
+    cdf_w, counts = DirectTransition_Splines!(
         distr_initial,
         m_n_star,
         m_a_star,
@@ -416,8 +416,9 @@ while distance > tol && counts < max_iter
         w_k,
         w_m,
         n_par,
-        m_par;
-        speedup = true
+        m_par,
+        counts;
+        speedup = false
         )
 
     difference = distr_old .- distr_initial
@@ -433,8 +434,8 @@ end
 println("Distribution Iterations: ", counts)
 println("Distribution Dist: ", distance)
 
-println("final distr: ")
-printArray(distr_initial[:,:,1])
+# println("final distr: ")
+# printArray(distr_initial[:,:,1])
 K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k)
 struct ssStruc
     distrSS

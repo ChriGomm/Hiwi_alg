@@ -126,8 +126,10 @@ function DirectTransition_Splines!(
     w_k,
     w_m,
     n_par::NumericalParameters,
-    m_par::ModelParameters;
-    speedup::Bool = true
+    m_par::ModelParameters,
+    count::Int64;
+    speedup::Bool = true,
+    
 )
 
     cdf_b_cond_k_initial = copy(distr_initial_on_grid[1:n_par.nm,:,:])
@@ -162,8 +164,40 @@ function DirectTransition_Splines!(
     # printArray(cdf_k_prime_on_grid_a)
     # println("cdf b cond k")
     # printArray(cdf_b_cond_k_prime_on_grid_a[:,:,1])
-    println("cdf w: ")
-    printArray(cdf_w)
+    check = diff(cdf_w,dims=1)
+    # println("test: ")
+    # printarray(check)
+    sign_tol = 1e-10
+    check .= (-1 .+sign.(diff(cdf_w,dims=1).+sign_tol)) .*sign.(diff(cdf_w,dims=1).+sign_tol)./2
+    # print(check)
+    checkp = sum(check)
+    if checkp>0
+        
+        
+        
+        for i in 1:n_par.ny
+
+            toprint = similar(diff(cdf_w[:,i]))
+            toprint .= (-1 .+sign.(diff(cdf_w[:,i]).+sign_tol)) .* sign.(diff(cdf_w[:,i]).+sign_tol)./2
+            toprintp = sum(toprint)
+            if toprintp>0
+                println("check (y = $i) =  $toprintp")
+                for i_w in 2:length(cdf_w[:,i])
+                    dist = cdf_w[i_w,i]-cdf_w[i_w-1,i]
+                    if dist<-sign_tol
+                        println("index $i_w, diff = $dist")
+                        count = 1000
+                    end
+                end
+
+
+                # println("cdf w:")
+                
+                # println("i_y = $i")
+                # println(cdf_w[:,i])
+            end
+        end
+    end
 
     cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
 
@@ -194,7 +228,7 @@ function DirectTransition_Splines!(
             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
         end
     end
-    println("")
+    # println("")
     # println("distr_bcondk prior normalisation: ")
     # printArray(distr_prime_on_grid[:,:,1])
     for i_y in 1:n_par.ny
@@ -216,7 +250,7 @@ function DirectTransition_Splines!(
 
     # println("distr_bcondk at end: ")
     # printArray(distr_prime_on_grid[:,:,1])
-    return cdf_w
+    return cdf_w, count
 
 end
 
@@ -240,7 +274,7 @@ function DirectTransition_Splines_adjusters!(
     m_par::ModelParameters;
     speedup::Bool = true
 )   
-# why calculate old cdf_w
+
 # why use pdf_y in place of pdf_inc
 
 
@@ -291,8 +325,8 @@ function DirectTransition_Splines_adjusters!(
         # normalize cdf_w
         # cdf_w_y .= min.(cdf_w_y,cdfend)
         # cdf_w_y[end] = cdfend
-        println("cdf_w_y: ")
-        println(cdf_w_y[w_grid_sort])
+        # println("cdf_w_y: ")
+        # println(cdf_w_y[w_grid_sort])
         cdf_w_y = cdf_w_y[w_grid_sort]
 
         cdf_w_y .= cdf_w_y./cdf_w_y[end]
@@ -300,11 +334,11 @@ function DirectTransition_Splines_adjusters!(
         cdf_w_y_spl = Interpolator(wgrid,cdf_w_y)
         # 2. Compute cdf over k' with DEGM
         if isnan(w_k[i_y]) | (w_k[i_y] < wgrid[1]) # k=0 is zero probability event
-            println("k=0 is zero prob event")
+            # println("k=0 is zero prob event")
             nodes_k = optk_sorted
             values_k = cdf_w_y
         else
-            println("not zero prob event")
+            # println("not zero prob event")
             # ?
             w_li = locate(w_k[i_y],wgrid)
             # make sure that k*=0 is included
@@ -316,8 +350,8 @@ function DirectTransition_Splines_adjusters!(
         # println("nodes_k: ",i_y,nodes_k)
         # println("values_k: ",values_k)
         # println("cdf_wy: ",cdf_w_y)
-        println("b_cond_k intp: ")
-        printArray(cdf_b_cond_k_intp[:,w_grid_sort])
+        # println("b_cond_k intp: ")
+        # printArray(cdf_b_cond_k_intp[:,w_grid_sort])
         cdf_k_int = k -> k < nodes_k[1] ? 0.0 : (k> nodes_k[end] ? 1.0 : Interpolator(nodes_k, values_k)(k) )#
         
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_int.(n_par.grid_k)
@@ -336,26 +370,34 @@ function DirectTransition_Splines_adjusters!(
         end
         # 3.2 Add k'=0
         if isnan(w_k[i_y]) | (w_k[i_y] < wgrid[1]) # k=0 is zero probability event, but with extrapolation in cdf_k_int, it now matters! However, m_a_aux just puts everything on m=0.
+            # I would put this, assure zero probablity, i.e. k=0 is no mass point
+            cdf_k_prime_on_grid_a[1:i_y]= 0
             cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .= Float64.(m_a_aux_y[1] .<= n_par.grid_m)
         else
             w_li = locate(w_k[i_y],wgrid)
-            i_wk = w_li+1
+            # i would omit the +1
+            i_wk = w_li#+1
             cdf_k_prime_on_grid_a[1,i_y] = cdf_w_y_spl(w_k[i_y])
             if w_m[i_y] < wgrid[1]
                 i_wb = 1
             else
                 i_wb = locate(w_m[i_y],wgrid)
             end
+            # not sure either about i_wb-1
             nodes2 = optb_sorted[max(i_wb-1,i_wk)+1:end]
             values2 = ones(length(nodes2))
             nodes1 = optb_sorted[i_wb:i_wk]
             values1 = (cdf_w_y[i_wb:i_wk]./cdf_k_prime_on_grid_a[1,i_y])
-
-            cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? (1 - (nodes1[1] - b)/(nodes1[1]-n_par.grid_m[1]))*values1[1] : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
+            
+            # I'm not sure about that 
+            # cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? (1 - (nodes1[1] - b)/(nodes1[1]-n_par.grid_m[1]))*values1[1] : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
+            # would maybe put
+            cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? 0 : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
             cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .= cdf_b_cond_k_prime_int.(n_par.grid_m)
-            if w_m[i_y] >= wgrid[1]
-                cdf_b_cond_k_prime_on_grid_a[1,1,i_y] = cdf_w_y_spl(w_m[i_y])/cdf_k_prime_on_grid_a[1,i_y] 
-            end
+            # I don't know why to do that
+            # if w_m[i_y] >= wgrid[1]
+            #     cdf_b_cond_k_prime_on_grid_a[1,1,i_y] = cdf_w_y_spl(w_m[i_y])/cdf_k_prime_on_grid_a[1,i_y] 
+            # end
         end
         # normalize
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y]./cdf_k_prime_on_grid_a[end,i_y]
@@ -367,7 +409,8 @@ function DirectTransition_Splines_adjusters!(
         # cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .= cdf_b_cond_k_prime_on_grid_a[:,:,i_y] .* pdf_inc[i_y]
         # cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_prime_on_grid_a[:,i_y] .* pdf_inc[i_y]
         # cdf_k_prime_dep_b[:,:,i_y] .= cdf_k_prime_dep_b[:,:,i_y] .* pdf_inc[i_y]
-        cdf_w_y .*= NaN
+        # cdf_w_y .*= NaN
+        cdf_w[:,i_y] = cdf_w_y
         
     end
     # println("cdf_k: ")
@@ -385,6 +428,8 @@ function DirectTransition_Splines_non_adjusters!(
     pdf_inc::AbstractArray,
     n_par::NumericalParameters,
 )
+    # println("cdf b cond k before transition: ")
+    # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
     for i_y = 1:n_par.ny
         cdfend = pdf_inc[i_y]
         for i_k = 1:n_par.nk
@@ -409,6 +454,8 @@ function DirectTransition_Splines_non_adjusters!(
                 #return cdf_values
             end
             m_to_cdf_spline_extr!(cdf_b_cond_k_given_y_k,n_par.grid_m)
+            # println("cdf b cond k n prior NaN check: ")
+            # println(cdf_b_cond_k_given_y_k)
             cdf_b_cond_k_given_y_k[1] = isnothing(i_mmin) ? cdf_b_cond_k_initial[1,i_k,i_y] : cdf_b_cond_k_initial[i_mmin,i_k,i_y]
             # normalize cdf_b_cond_k_given_y_k
             # cdf_b_cond_k_given_y_k .= min.(cdf_b_cond_k_given_y_k,cdfend)
@@ -416,6 +463,8 @@ function DirectTransition_Splines_non_adjusters!(
             cdf_b_cond_k_given_y_k .= cdf_b_cond_k_given_y_k./cdf_b_cond_k_given_y_k[end]
         end
     end
+    # println("cdf b cond k after transition: ")
+    # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
 end
 
 

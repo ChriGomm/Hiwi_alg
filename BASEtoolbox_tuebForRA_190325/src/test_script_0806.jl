@@ -3,7 +3,7 @@
 #------------------------------------------------------------------------------
 # ATTENTION: make sure that your present working directory pwd() is set to the folder
 # containing script.jl and BASEforHANK.jl. Otherwise adjust the load path.
-# cd("./src")
+cd("./src")
 # push!(LOAD_PATH, pwd())
 # pre-process user inputs for model setup
 using Printf
@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-# include("BASEforHANK.jl")
+include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
@@ -231,38 +231,66 @@ pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.n
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
 
-# @timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
-#     cdf_b_cond_k_prime_on_grid_a,
-#     cdf_k_prime_on_grid_a,
-#     m_a_star, 
-#     k_a_star,
-#     cdf_b_cond_k_initial,
-#     cdf_k_initial,
-#     distr_y,
-#     RB,
-#     RK,
-#     sortingw,
-#     w[sortingw],
-#     w_eval_grid,
-#     m_a_aux,
-#     w_k,
-#     w_m,
-#     n_par,
-#     m_par;
-#     speedup = true
-# )
+@timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
+    cdf_b_cond_k_prime_on_grid_a,
+    cdf_k_prime_on_grid_a,
+    m_a_star, 
+    k_a_star,
+    cdf_b_cond_k_initial,
+    cdf_k_initial,
+    distr_y,
+    RB,
+    RK,
+    sortingw,
+    w[sortingw],
+    w_eval_grid,
+    m_a_aux,
+    w_k,
+    w_m,
+    n_par,
+    m_par;
+    speedup = false
+)
 
-# cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
+cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
 
-# # include(path_to_transition)
 
-# @timev DirectTransition_Splines_non_adjusters!(
-#     cdf_b_cond_k_prime_on_grid_n,
-#     m_n_star, 
-#     cdf_b_cond_k_initial,
-#     distr_y,
-#     n_par,
-# )
+# include(path_to_transition)
+
+@timev DirectTransition_Splines_non_adjusters!(
+    cdf_b_cond_k_prime_on_grid_n,
+    m_n_star, 
+    cdf_b_cond_k_initial,
+    distr_y,
+    n_par,
+)
+distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
+cdf_k_initial_orig = copy(cdf_k_initial)
+cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
+distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
+
+    for i_y in 1:n_par.ny
+        distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
+        for i_k in 2:n_par.nk
+            distr_k_finite = distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]
+            distr_k_initial_finite = cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]
+            if distr_k_finite ==0
+                distr_k_finite= 1e-16
+            end
+            if distr_k_initial_finite==0
+                distr_k_initial_finite=1e-16
+            end
+            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
+        end
+    end
+    # println("")
+    # println("distr_bcondk prior normalisation: ")
+    # printArray(distr_prime_on_grid[:,:,1])
+    for i_y in 1:n_par.ny
+        
+            distr_prime_on_grid[:,:,i_y] .= distr_prime_on_grid[:,:,i_y].*distr_y[i_y]
+        
+    end
 
 # cdf_b_cond_k_prime_on_grid = m_par.λ .* cdf_b_cond_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n
 # cdf_k_prime_on_grid = m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
@@ -427,7 +455,7 @@ while distance > tol && counts < max_iter
     println("$counts - distance: $distance")
 
     # mix in young marginal k distribution
-    # distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
+    distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
 
 end
 

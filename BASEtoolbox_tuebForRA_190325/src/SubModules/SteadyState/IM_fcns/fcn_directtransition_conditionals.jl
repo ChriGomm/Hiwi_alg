@@ -212,6 +212,8 @@ function DirectTransition_Splines!(
     # println("cdf b cond prime n")
     # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
 
+    cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
+
     distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
 
     for i_y in 1:n_par.ny
@@ -283,7 +285,7 @@ function DirectTransition_Splines_adjusters!(
     cdf_k_prime_dep_b = zeros(n_par.nm,n_par.nk,n_par.ny)
     for i_y in 1:n_par.ny
         # 0. normalize
-        pdf_y = cdf_k_initial[end,i_y]
+        pdf_y = pdf_inc[i_y]
         # 1. Need to generate total wealth distribution from cdf_b_cond_k_initial, cdf_k_initial
         cdf_w_y = view(cdf_w,:,i_y)
         m_a_aux_y = view(m_a_aux,:,i_y)
@@ -371,7 +373,7 @@ function DirectTransition_Splines_adjusters!(
         # 3.2 Add k'=0
         if isnan(w_k[i_y]) | (w_k[i_y] < wgrid[1]) # k=0 is zero probability event, but with extrapolation in cdf_k_int, it now matters! However, m_a_aux just puts everything on m=0.
             # I would put this, assure zero probablity, i.e. k=0 is no mass point
-            cdf_k_prime_on_grid_a[1:i_y]= 0
+            cdf_k_prime_on_grid_a[1,i_y] = 0
             cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .= Float64.(m_a_aux_y[1] .<= n_par.grid_m)
         else
             w_li = locate(w_k[i_y],wgrid)
@@ -390,9 +392,10 @@ function DirectTransition_Splines_adjusters!(
             values1 = (cdf_w_y[i_wb:i_wk]./cdf_k_prime_on_grid_a[1,i_y])
             
             # I'm not sure about that 
-            # cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? (1 - (nodes1[1] - b)/(nodes1[1]-n_par.grid_m[1]))*values1[1] : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
+            m_imin = findfirst(n_par.grid_m .> nodes1[1])-1
+            cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < n_par.grid_m[m_imin] ? 0.0 : (b < nodes1[1] ? (1 - (nodes1[1] - b)/(nodes1[1]-n_par.grid_m[m_imin]))*values1[1] : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b)))
             # would maybe put
-            cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? 0 : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
+            #cdf_b_cond_k_prime_int = b -> b > nodes2[end] ? 1.0 : (b < nodes1[1] ? 0.0 : Interpolator(vcat(nodes1,nodes2),vcat(values1,values2))(b))
             cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .= cdf_b_cond_k_prime_int.(n_par.grid_m)
             # I don't know why to do that
             # if w_m[i_y] >= wgrid[1]
@@ -431,7 +434,7 @@ function DirectTransition_Splines_non_adjusters!(
     # println("cdf b cond k before transition: ")
     # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
     for i_y = 1:n_par.ny
-        cdfend = pdf_inc[i_y]
+        #cdfend = pdf_inc[i_y]
         for i_k = 1:n_par.nk
             cdf_b_cond_k_given_y_k = view(cdf_b_cond_k_prime_on_grid_n,:,i_k,i_y)
             i_mmin = findlast(m_n_prime[:,i_k,i_y] .== n_par.grid_m[1])

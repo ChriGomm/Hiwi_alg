@@ -3,7 +3,7 @@
 #------------------------------------------------------------------------------
 # ATTENTION: make sure that your present working directory pwd() is set to the folder
 # containing script.jl and BASEforHANK.jl. Otherwise adjust the load path.
-cd("./src")
+# cd("./src")
 # push!(LOAD_PATH, pwd())
 # pre-process user inputs for model setup
 using Printf
@@ -25,12 +25,12 @@ function saveArray(filename::String,a::AbstractArray)
     open(filename,"w") do file
     if length(dim)==1
         for i in 1:dim[1]
-            write(file,"$(@sprintf("%.5f;\n",a[i]))")
+            write(file,"$(@sprintf("%.15f;\n",a[i]))")
         end
     elseif length(dim)==2
         for i in 1:dim[1]
             for j in 1:dim[2]
-                write(file,"$(@sprintf("%.5f;",a[i,j]))")
+                write(file,"$(@sprintf("%.15f;",a[i,j]))")
                 if j==dim[2]
                     write(file,"\n")
                 else
@@ -44,14 +44,21 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
 # prevents BLAS from grabbing all threads on a machine
 BASEforHANK.LinearAlgebra.BLAS.set_num_threads(Threads.nthreads())
 
-   
+function merge_distr!(final::AbstractArray,merger::AbstractArray,cut::Int64,scale::Int64)
+    scale = cut-1<scale ? cut-1 : scale
+    weight = [i*1/scale for i in 0:scale]
+    final[cut-scale:cut] .= (1 .-weight).*merger[cut-scale:cut].+ weight.*final[cut-scale:cut]
+    final[1:cut-scale]= merger[1:cut-scale]
+end
+
+    
 #------------------------------------------------------------------------------
 # initialize parameters to priors to select coefficients of DCTs of Vm, Vk]
 # that are retained 
@@ -167,6 +174,56 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         end
     end
     w_m = [isempty(w_bar[i_y]) ? NaN : w_bar[i_y][1] for i_y in 1:n_par.ny]
+    # for i in 1:n_par.ny
+    # saveArray("out/m_star$i"*"_a_800",m_a_star[:,:,i])
+    # saveArray("out/m_star$i"*"_n_800",m_n_star[:,:,i])
+    # saveArray("out/k_star$i"*"_a_800",k_a_star[:,:,i])
+    # end
+
+    function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,cutoff::AbstractArray,counting::Int64,pos::Int64)
+        for i_y in 1:n_par.ny
+        # i_y =1
+        num_der = diff(cdf_initial[:,i_y])[2:end]
+        initial_cut = findfirst(num_der[40:end].==0)
+        initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
+        cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
+        deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
+        pdf_k_initial_y = deriv_initial.(n_par.grid_k[2:end])
+        cut_merge = findfirst(num_der.<0.001)
+        cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
+        cutoff[counting,pos,i_y] = cut_merge
+        merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
+        
+        neg_index = findfirst(pdf_k_initial_y.<0)
+        if ! isnothing(neg_index)
+            cut_neg = findlast(pdf_k_initial_y[1:neg_index].>0)
+            # endval =  
+            resid = [i*(pdf_k_initial_y[cut_neg]-minimum(abs, [pdf_k_initial_y[cut_neg]/4,1e-20]))/(length(pdf_k_initial_y)-cut_neg) for i in 1:(length(pdf_k_initial_y)-cut_neg)]
+            pdf_k_initial_y[cut_neg+1:end] = resid
+        end
+        zero_index = findfirst(pdf_k_initial_y[2:end].==0)
+        if ! isnothing(zero_index)
+            indices = findall(pdf_k_initial_y[2:end].==0)
+            for index in indices
+                index +=1
+                if index ==2
+                    pdf_k_initial_y[index] = pdf_k_initial_y[index+1]
+                elseif index == length(pdf_k_initial_y)
+                    pdf_k_initial_y[index] = pdf_k_initial_y[index-1]
+                else
+                    pdf_k_initial_y[index] = (pdf_k_initial_y[index+1]+pdf_k_initial_y[index-1])/2
+                end
+            end
+        end
+            
+
+        pdf_initial[2:end,i_y] = pdf_k_initial_y
+        end
+        
+        
+        # return initial_cut, cut_merge
+    end
+
 
 # find_ss_distribution_splines --------------------------
 # DirectTransitionSplines(
@@ -286,11 +343,27 @@ distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0
     # println("")
     # println("distr_bcondk prior normalisation: ")
     # printArray(distr_prime_on_grid[:,:,1])
+    
     for i_y in 1:n_par.ny
         
             distr_prime_on_grid[:,:,i_y] .= distr_prime_on_grid[:,:,i_y].*distr_y[i_y]
         
     end
+
+
+# saveArray("out/m_star_a.csv",m_a_star[:,:,1])
+# saveArray("out/k_star_a.csv",k_a_star[:,:,1])
+# saveArray("out/m_star_n.csv",m_n_star[:,:,1])
+# saveArray("out/cdf_k_initial.csv",cdf_k_initial)
+
+
+# saveArray("out/cdfb_condk.csv",cdf_b_cond_k_initial[:,:,1])
+# saveArray("out/bcondk_a.csv",cdf_b_cond_k_prime_on_grid_a[:,:,1])
+# saveArray("out/bcondk_n.csv",cdf_b_cond_k_prime_on_grid_n[:,:,1])
+# saveArray("out/k_a.csv",cdf_k_prime_on_grid_a)
+# saveArray("out/cdf_prime.csv",distr_prime_on_grid[:,:,1]/distr_y[1])
+
+
 
 # cdf_b_cond_k_prime_on_grid = m_par.λ .* cdf_b_cond_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n
 # cdf_k_prime_on_grid = m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
@@ -409,17 +482,18 @@ distr_initial[end,:,:] = cdf_k_young_grid
 
 
 
-
+# printArray(cutof[:,:,1])
 
 
 
 # Tolerance for change in cdf from period to period
 tol = n_par.ϵ
 # Maximum iterations to find steady state distribution
-max_iter = 200
+max_iter = 3
 # Init 
 distance = 9999.0 
 counts = 0
+cutof = zeros(Int64,(max_iter,3,n_par.ny))
 # println("initial distro: ")
 # printArray(distr_initial[:,:,1])
 while distance > tol && counts < max_iter
@@ -445,7 +519,9 @@ while distance > tol && counts < max_iter
         w_m,
         n_par,
         m_par,
-        counts;
+        counts,
+        distance,
+        cutof;
         speedup = false
         )
 
@@ -453,15 +529,15 @@ while distance > tol && counts < max_iter
     distance = maximum(abs, difference)
 
     println("$counts - distance: $distance")
-
+    
     # mix in young marginal k distribution
-    distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
+    # distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
 
 end
 
 println("Distribution Iterations: ", counts)
 println("Distribution Dist: ", distance)
-
+assert(1==0)
 # println("final distr: ")
 # printArray(distr_initial[:,:,1])
 K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k)

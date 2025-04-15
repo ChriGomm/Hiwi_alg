@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-# include("BASEforHANK.jl")
+include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
@@ -174,13 +174,15 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         end
     end
     w_m = [isempty(w_bar[i_y]) ? NaN : w_bar[i_y][1] for i_y in 1:n_par.ny]
-    # for i in 1:n_par.ny
-    # saveArray("out/m_star$i"*"_a_800",m_a_star[:,:,i])
-    # saveArray("out/m_star$i"*"_n_800",m_n_star[:,:,i])
-    # saveArray("out/k_star$i"*"_a_800",k_a_star[:,:,i])
-    # end
-
-    function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,cutoff::AbstractArray,counting::Int64,pos::Int64)
+    func_dir  = "update_funk_500_on_500_each_500"
+    mkdir(func_dir)
+    for i in 1:n_par.ny
+    saveArray(func_dir*"/m_star$i"*"_a.csv",m_a_star[:,:,i])
+    saveArray(func_dir*"/m_star$i"*"_n.csv",m_n_star[:,:,i])
+    saveArray(func_dir*"/k_star$i"*"_a.csv",k_a_star[:,:,i])
+    end
+    assert(0==1)
+    function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,neg_cut::AbstractArray,zero_occurance::AbstractArray,counting::Int64,pos::Int64)
         for i_y in 1:n_par.ny
         # i_y =1
         num_der = diff(cdf_initial[:,i_y])[2:end]
@@ -189,14 +191,15 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
         deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
         pdf_k_initial_y = deriv_initial.(n_par.grid_k[2:end])
-        cut_merge = findfirst(num_der.<0.001)
-        cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
-        cutoff[counting,pos,i_y] = cut_merge
-        merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
+        # cut_merge = findfirst(num_der.<0.001)
+        # cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
+        # cutoff[counting,pos,i_y] = cut_merge
+        # merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
         
         neg_index = findfirst(pdf_k_initial_y.<0)
         if ! isnothing(neg_index)
             cut_neg = findlast(pdf_k_initial_y[1:neg_index].>0)
+            neg_cut[counting,pos,i_y] = cut_neg
             # endval =  
             resid = [i*(pdf_k_initial_y[cut_neg]-minimum(abs, [pdf_k_initial_y[cut_neg]/4,1e-20]))/(length(pdf_k_initial_y)-cut_neg) for i in 1:(length(pdf_k_initial_y)-cut_neg)]
             pdf_k_initial_y[cut_neg+1:end] = resid
@@ -204,6 +207,7 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         zero_index = findfirst(pdf_k_initial_y[2:end].==0)
         if ! isnothing(zero_index)
             indices = findall(pdf_k_initial_y[2:end].==0)
+            zero_occurance[counting,pos,i_y,1:length(indices)] .= indices .+ 1
             for index in indices
                 index +=1
                 if index ==2
@@ -489,11 +493,14 @@ distr_initial[end,:,:] = cdf_k_young_grid
 # Tolerance for change in cdf from period to period
 tol = n_par.ϵ
 # Maximum iterations to find steady state distribution
-max_iter = 3
+max_iter = 200
 # Init 
 distance = 9999.0 
 counts = 0
-cutof = zeros(Int64,(max_iter,3,n_par.ny))
+cut_negatives = ones(Int64,(max_iter,3,n_par.ny)) 
+zero_occurances = ones(Int64,(max_iter,3,n_par.ny,100)) 
+cut_negatives .*= (-1)
+zero_occurances .*= (-1)
 # println("initial distro: ")
 # printArray(distr_initial[:,:,1])
 while distance > tol && counts < max_iter
@@ -521,7 +528,8 @@ while distance > tol && counts < max_iter
         m_par,
         counts,
         distance,
-        cutof;
+        cut_negatives,
+        zero_occurances;
         speedup = false
         )
 
@@ -537,7 +545,7 @@ end
 
 println("Distribution Iterations: ", counts)
 println("Distribution Dist: ", distance)
-assert(1==0)
+
 # println("final distr: ")
 # printArray(distr_initial[:,:,1])
 K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k)
@@ -565,7 +573,7 @@ B = BASEforHANK.SteadyState.expected_value(sum(cdf_b,dims=2)[:],n_par.grid_m)
 # plot(n_par.grid_m,sum(cdf_b,dims=2))
 
 for i_y = 1:n_par.ny
-    for i_k = 1:10
+    for i_k = 1:40
         plot(n_par.grid_m,cdf_b_cond_k_young_grid[:,i_k,1],label="young",xlims=(0,20))
         plot!(n_par.grid_m,distr_initial[1:end-1,i_k,1]/distr_y[1],label="degm")
         vline!([m_a_aux[i_k,1]],label="m_a",linestyle=:dash)

@@ -129,7 +129,8 @@ function DirectTransition_Splines!(
     m_par::ModelParameters,
     count::Int64,
     old_distance::Float64,
-    cutof_counter::AbstractArray;
+    cutof_counter::AbstractArray,
+    zero_o::AbstractArray;
     speedup::Bool = true,
     
 )
@@ -249,11 +250,11 @@ function DirectTransition_Splines!(
     # println("pdf_k_a",pdf_k_a[cut_m:cut_i,1])
     # println("pdf_k_a",pdf_k_a[cut_i:end,1])
 
-    pdf_from_spline!(cdf_k_initial,pdf_k_initial,cutof_counter,count,1)
+    pdf_from_spline!(cdf_k_initial,pdf_k_initial,cutof_counter,zero_o,count,1)
     # println("pdf_k_initial: ",pdf_k_initial[:,1])
-    pdf_from_spline!(distr_prime_on_grid[n_par.nm+1,:,:],pdf_k_prime,cutof_counter,count,2)
+    pdf_from_spline!(distr_prime_on_grid[n_par.nm+1,:,:],pdf_k_prime,cutof_counter,zero_o,count,2)
     # println("pdf_k_prime: ",pdf_k_prime[:,1])
-    pdf_from_spline!(cdf_k_prime_on_grid_a,pdf_k_a,cutof_counter,count,3)
+    pdf_from_spline!(cdf_k_prime_on_grid_a,pdf_k_a,cutof_counter,zero_o,count,3)
     # println("pdf_k_a",pdf_k_a[:,1])
 
     # num_der_prime = diff(distr_prime_on_grid[n_par.nm+1,:,i_y])[2:end]
@@ -339,7 +340,7 @@ function DirectTransition_Splines!(
             saveArray(newdir*"/pdf_k_a.csv",pdf_k_a)
             saveArray(newdir*"/cdf_k_initial.csv",cdf_k_initial)
             saveArray(newdir*"/cdf_prime.csv",distr_prime_on_grid[:,:,1]/pdf_inc[1])
-        elseif count%1==0
+        elseif count%7==0
             newdir = "out/iterstep_normal"*"_$count"
             mkdir(newdir)
             saveArray(newdir*"/pdf_k_initial.csv",pdf_k_initial)
@@ -350,6 +351,10 @@ function DirectTransition_Splines!(
             saveArray(newdir*"/pdf_k_a.csv",pdf_k_a)
             saveArray(newdir*"/cdf_k_initial.csv",cdf_k_initial)
             saveArray(newdir*"/cdf_prime.csv",distr_prime_on_grid[:,:,1]/pdf_inc[1])
+            printArray(cutof_counter[count-6:count,:,1])
+            for i in 1:3
+                printArray(zero_o[count-6:count,i,1,1:25])
+            end
     
             
     end

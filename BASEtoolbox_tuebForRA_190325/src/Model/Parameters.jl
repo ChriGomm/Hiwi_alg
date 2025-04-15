@@ -141,15 +141,15 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
     # Numerical Parameters to be set in advance
     m_par::ModelParameters = ModelParameters()
     ny::Int = 4     # ngrid income (4 is the coarse grid used initially in finding the StE)
-    nk::Int = 200      # ngrid illiquid assets (capital) (10 is the coarse grid used initially in finding the StE)
-    nm::Int = 200      # ngrid liquid assets (bonds) (10 is the coarse grid used initially in finding the StE)
+    nk::Int = 500      # ngrid illiquid assets (capital) (10 is the coarse grid used initially in finding the StE)
+    nm::Int = 500      # ngrid liquid assets (bonds) (10 is the coarse grid used initially in finding the StE)
     ny_copula::Int = 4  # ngrid for copula in income (rule of thumb: divide ny, w/o entrepreneur, by two)
     nk_copula::Int = 20   # ngrid for copula in illiquid assets (capital, rule of thumb: divide nk by twelve)
     nm_copula::Int = 20  # ngrid for copula in liquid assets (bonds, rule of thumb: divide nm by twelve)
     w_sel_k::Vector{Int} = collect(1:3:nk) # select every *?* gridpoint
     w_sel_m::Vector{Int} = collect(1:3:nm) # select every *?* gridpoint
     kmin::Float64 = 0.0       # gridmin capital
-    kmax::Float64 = 800.0    # gridmax capital
+    kmax::Float64 = 500.0    # gridmax capital
     mmin::Float64 = 0.0      # gridmin bonds
     mmax::Float64 = 500.0    # gridmax bonds
     ϵ::Float64 = 1e-13 # precision of solution 
@@ -208,12 +208,12 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
 
     # grid illiquid assets:
     grid_k::Array{Float64,1} = #range(kmin,stop=kmax,length=nk)
-        exp.(range(log(kmin + 1.0), stop = log(kmax + 1.0), length = nk)) .- 1.0
-        #(range(0, stop = sqrt(kmax - kmin + 1.0), length = nk)) .^ 2 .+ kmin
+        # exp.(range(log(kmin + 1.0), stop = log(kmax + 1.0), length = nk)) .- 1.0
+        (range(0, stop = sqrt(kmax - kmin ), length = nk)) .^ 2 .+ kmin
     # grid liquid assets:
     grid_m::Array{Float64,1} = #range(mmin,stop=mmax,length=nk)
-        exp.(range(0, stop = log(mmax - mmin + 1.0), length = nm)) .+ mmin .- 1.0
-        #(range(0, stop = sqrt(mmax - mmin + 1.0), length = nm)) .^ 2 .+ mmin
+        # exp.(range(0, stop = log(mmax - mmin + 1.0), length = nm)) .+ mmin .- 1.0
+        (range(0, stop = sqrt(mmax - mmin ), length = nm)) .^ 2 .+ mmin
 
     # meshes for income, bonds, capital
     mesh_y::Array{Float64,3} = repeat(reshape(grid_y, (1, 1, ny)), outer = [nm, nk, 1])

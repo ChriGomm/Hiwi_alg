@@ -1,8 +1,14 @@
 .DS_Store
-src/Output/Figures/**
+src/Output/Figures_old/**
 src/Output/Tables/**
 src/Output/Saves/**
 src/Preprocessor/generated_fcns/**
+src/out_derivative_by_diff/img_bcondk/** 
+src/out_derivative_by_diff/img_pdf_k/**
+src/out_full_spline_derivative/img_bcondk/** 
+src/out_full_spline_derivative/img_pdf_k/**
+src/out_partial_grid_derivative_and_the_spline_one/img_bcondk/** 
+src/out_partial_grid_derivative_and_the_spline_one/img_pdf_k/**
 # exception to the rule
 !src/Preprocessor/generated_fcns/.gitkeep 
 # keep estimated model

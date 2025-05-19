@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
@@ -174,14 +174,14 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         end
     end
     w_m = [isempty(w_bar[i_y]) ? NaN : w_bar[i_y][1] for i_y in 1:n_par.ny]
-    func_dir  = "update_funk_500_on_500_each_500"
-    mkdir(func_dir)
-    for i in 1:n_par.ny
-    saveArray(func_dir*"/m_star$i"*"_a.csv",m_a_star[:,:,i])
-    saveArray(func_dir*"/m_star$i"*"_n.csv",m_n_star[:,:,i])
-    saveArray(func_dir*"/k_star$i"*"_a.csv",k_a_star[:,:,i])
-    end
-    assert(0==1)
+    # func_dir  = "update_funk_500_on_500_each_500"
+    # mkdir(func_dir)
+    # for i in 1:n_par.ny
+    # saveArray(func_dir*"/m_star$i"*"_a.csv",m_a_star[:,:,i])
+    # saveArray(func_dir*"/m_star$i"*"_n.csv",m_n_star[:,:,i])
+    # saveArray(func_dir*"/k_star$i"*"_a.csv",k_a_star[:,:,i])
+    # end
+    # assert(0==1)
     function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,neg_cut::AbstractArray,zero_occurance::AbstractArray,counting::Int64,pos::Int64)
         for i_y in 1:n_par.ny
         # i_y =1
@@ -417,8 +417,17 @@ distr_initial = NaN*ones(n_par.nm+1,n_par.nk,n_par.ny)
 distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
 distr_initial[end,:,:] = cdf_k_young_grid
 
-
-
+# saveArray("cdf_k_young_800k_in_200steps.csv",cdf_k_young_grid)
+# for i_y in 1:4
+# saveArray("cdf_bcondk_young_800k_500b_200steps_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
+# end
+# for i_y in 1:4
+#     saveArray("pdf_bcondk_young_org_iy$i_y.csv",ss_full_young.distrSS[:,:,i_y])
+# end
+for i_y in 1:4
+    saveArray("cdf_bcondk_young_org_iy$i_y.csv",cdf_b_cond_k_young[:,:,i_y])
+    end
+assert(1==0)
 # cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
 # cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
 

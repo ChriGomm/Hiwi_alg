@@ -332,26 +332,31 @@ function DirectTransition_Splines!(
                 newdir = "out/iterstep_dist$count"
             end
             mkdir(newdir)
-            saveArray(newdir*"/pdf_k_initial.csv",pdf_k_initial)
-            saveArray(newdir*"/cdfb_condk_initial.csv",cdf_b_cond_k_initial[:,:,1]/pdf_inc[1])
-            saveArray(newdir*"/bcondk_a.csv",cdf_b_cond_k_prime_on_grid_a[:,:,1])
-            saveArray(newdir*"/bcondk_n.csv",cdf_b_cond_k_prime_on_grid_n[:,:,1])
-            saveArray(newdir*"/pdf_k_prime.csv",pdf_k_prime)
-            saveArray(newdir*"/pdf_k_a.csv",pdf_k_a)
-            saveArray(newdir*"/cdf_k_initial.csv",cdf_k_initial)
-            saveArray(newdir*"/cdf_prime.csv",distr_prime_on_grid[:,:,1]/pdf_inc[1])
+            for i_y in 1:n_par.ny
+                saveArray(newdir*"/pdf_k_initial_$i_y.csv",pdf_k_initial)
+                saveArray(newdir*"/cdfb_condk_initial_$i_y.csv",cdf_b_cond_k_initial[:,:,i_y]/pdf_inc[i_y])
+                saveArray(newdir*"/bcondk_a_$i_y.csv",cdf_b_cond_k_prime_on_grid_a[:,:,i_y])
+                saveArray(newdir*"/bcondk_n_$i_y.csv",cdf_b_cond_k_prime_on_grid_n[:,:,i_y])
+                saveArray(newdir*"/pdf_k_prime_$i_y.csv",pdf_k_prime)
+                saveArray(newdir*"/pdf_k_a_$i_y.csv",pdf_k_a)
+                saveArray(newdir*"/cdf_k_initial_$i_y.csv",cdf_k_initial)
+                saveArray(newdir*"/cdf_prime_$i_y.csv",distr_prime_on_grid[:,:,i_y]/pdf_inc[i_y])
+            end
         elseif count%7==0
             newdir = "out/iterstep_normal"*"_$count"
             mkdir(newdir)
-            saveArray(newdir*"/pdf_k_initial.csv",pdf_k_initial)
-            saveArray(newdir*"/cdfb_condk_initial.csv",cdf_b_cond_k_initial[:,:,1]/pdf_inc[1])
-            saveArray(newdir*"/bcondk_a.csv",cdf_b_cond_k_prime_on_grid_a[:,:,1])
-            saveArray(newdir*"/bcondk_n.csv",cdf_b_cond_k_prime_on_grid_n[:,:,1])
-            saveArray(newdir*"/pdf_k_prime.csv",pdf_k_prime)
-            saveArray(newdir*"/pdf_k_a.csv",pdf_k_a)
-            saveArray(newdir*"/cdf_k_initial.csv",cdf_k_initial)
-            saveArray(newdir*"/cdf_prime.csv",distr_prime_on_grid[:,:,1]/pdf_inc[1])
+            for i_y in 1:n_par.ny
+                saveArray(newdir*"/pdf_k_initial_$i_y.csv",pdf_k_initial)
+                saveArray(newdir*"/cdfb_condk_initial_$i_y.csv",cdf_b_cond_k_initial[:,:,i_y]/pdf_inc[i_y])
+                saveArray(newdir*"/bcondk_a_$i_y.csv",cdf_b_cond_k_prime_on_grid_a[:,:,i_y])
+                saveArray(newdir*"/bcondk_n_$i_y.csv",cdf_b_cond_k_prime_on_grid_n[:,:,i_y])
+                saveArray(newdir*"/pdf_k_prime_$i_y.csv",pdf_k_prime)
+                saveArray(newdir*"/pdf_k_a_$i_y.csv",pdf_k_a)
+                saveArray(newdir*"/cdf_k_initial_$i_y.csv",cdf_k_initial)
+                saveArray(newdir*"/cdf_prime_$i_y.csv",distr_prime_on_grid[:,:,i_y]/pdf_inc[i_y])
+            end
             printArray(cutof_counter[count-6:count,:,1])
+            
             for i in 1:3
                 printArray(zero_o[count-6:count,i,1,1:25])
             end

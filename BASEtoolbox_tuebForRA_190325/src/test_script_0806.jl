@@ -25,16 +25,16 @@ function saveArray(filename::String,a::AbstractArray)
     open(filename,"w") do file
     if length(dim)==1
         for i in 1:dim[1]
-            write(file,"$(@sprintf("%.15f;\n",a[i]))")
+            write(file,"$(@sprintf("%.15f\n",a[i]))")
         end
     elseif length(dim)==2
         for i in 1:dim[1]
             for j in 1:dim[2]
-                write(file,"$(@sprintf("%.15f;",a[i,j]))")
+                write(file,"$(@sprintf("%.15f",a[i,j]))")
                 if j==dim[2]
                     write(file,"\n")
                 else
-                    write(file,"\t")
+                    write(file,";\t")
                 end
             end
         end
@@ -86,7 +86,10 @@ n_par = NumericalParameters(
         distr_names = BASEforHANK.distr_names,
         method_for_ss_distr="splines" # method for finding the stationary distribution
     )
-
+#    n_par.grid_k[1:n_par.nk] = exp.(range(log(n_par.kmin+ 1.0), stop = log(n_par.kmax+420  + 1.0), length = n_par.nk)) .- 1.0
+# #    n_par.grid_k[n_par.nk]= 500
+#    n_par.grid_m[1:n_par.nm] = exp.(range(0, stop = log(n_par.mmax+450 - n_par.mmin + 1.0), length = n_par.nm)) .+ n_par.mmin .- 1.0
+#    n_par.grid_m[n_par.nm] = 500
 # Kdiff ---------------------
 
 K_guess = 25.0018
@@ -146,7 +149,6 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
     end
     Vm = eff_int .* BASEforHANK.IncomesETC.mutil(c_guess, m_par)
     Vk = (r + m_par.λ) .* BASEforHANK.IncomesETC.mutil(c_guess, m_par)
-    
 
 
     RB_guess = m_par.RB
@@ -185,19 +187,20 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
     function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,neg_cut::AbstractArray,zero_occurance::AbstractArray,counting::Int64,pos::Int64)
         for i_y in 1:n_par.ny
         # i_y =1
-        num_der = diff(cdf_initial[:,i_y])[2:end]
-        initial_cut = findfirst(num_der[40:end].==0)
-        initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
-        cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
-        deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
-        pdf_k_initial_y = deriv_initial.(n_par.grid_k[2:end])
+        num_der = diff(cdf_initial[:,i_y])[1:end]
+        # initial_cut = findfirst(num_der[40:end].==0)
+        # initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
+        # cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
+        # deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
+        # pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
         # cut_merge = findfirst(num_der.<0.001)
         # cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
         # cutoff[counting,pos,i_y] = cut_merge
         # merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
-        
+        pdf_k_initial_y = num_der
         neg_index = findfirst(pdf_k_initial_y.<0)
         if ! isnothing(neg_index)
+            # println("neg found: ",pos)
             cut_neg = findlast(pdf_k_initial_y[1:neg_index].>0)
             neg_cut[counting,pos,i_y] = cut_neg
             # endval =  
@@ -206,8 +209,10 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         end
         zero_index = findfirst(pdf_k_initial_y[2:end].==0)
         if ! isnothing(zero_index)
+            # println("zero found, ",pos," i_y=",i_y)
             indices = findall(pdf_k_initial_y[2:end].==0)
             zero_occurance[counting,pos,i_y,1:length(indices)] .= indices .+ 1
+            # println("zero at: ",indices,"zero_index: ",zero_index)
             for index in indices
                 index +=1
                 if index ==2
@@ -222,6 +227,7 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
             
 
         pdf_initial[2:end,i_y] = pdf_k_initial_y
+        pdf_initial[1,i_y] = cdf_k_initial[1,i_y]
         end
         
         
@@ -292,67 +298,67 @@ pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.n
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
 
-@timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
-    cdf_b_cond_k_prime_on_grid_a,
-    cdf_k_prime_on_grid_a,
-    m_a_star, 
-    k_a_star,
-    cdf_b_cond_k_initial,
-    cdf_k_initial,
-    distr_y,
-    RB,
-    RK,
-    sortingw,
-    w[sortingw],
-    w_eval_grid,
-    m_a_aux,
-    w_k,
-    w_m,
-    n_par,
-    m_par;
-    speedup = false
-)
+# @timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
+#     cdf_b_cond_k_prime_on_grid_a,
+#     cdf_k_prime_on_grid_a,
+#     m_a_star, 
+#     k_a_star,
+#     cdf_b_cond_k_initial,
+#     cdf_k_initial,
+#     distr_y,
+#     RB,
+#     RK,
+#     sortingw,
+#     w[sortingw],
+#     w_eval_grid,
+#     m_a_aux,
+#     w_k,
+#     w_m,
+#     n_par,
+#     m_par;
+#     speedup = false
+# )
 
-cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
+# cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
 
 
-# include(path_to_transition)
+# # include(path_to_transition)
 
-@timev DirectTransition_Splines_non_adjusters!(
-    cdf_b_cond_k_prime_on_grid_n,
-    m_n_star, 
-    cdf_b_cond_k_initial,
-    distr_y,
-    n_par,
-)
-distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
-cdf_k_initial_orig = copy(cdf_k_initial)
-cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
-distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
+# @timev DirectTransition_Splines_non_adjusters!(
+#     cdf_b_cond_k_prime_on_grid_n,
+#     m_n_star, 
+#     cdf_b_cond_k_initial,
+#     distr_y,
+#     n_par,
+# )
+# distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
+# cdf_k_initial_orig = copy(cdf_k_initial)
+# cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
+# distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
 
-    for i_y in 1:n_par.ny
-        distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
-        for i_k in 2:n_par.nk
-            distr_k_finite = distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]
-            distr_k_initial_finite = cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]
-            if distr_k_finite ==0
-                distr_k_finite= 1e-16
-            end
-            if distr_k_initial_finite==0
-                distr_k_initial_finite=1e-16
-            end
-            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
-        end
-    end
-    # println("")
-    # println("distr_bcondk prior normalisation: ")
-    # printArray(distr_prime_on_grid[:,:,1])
+#     for i_y in 1:n_par.ny
+#         distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
+#         for i_k in 2:n_par.nk
+#             distr_k_finite = distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]
+#             distr_k_initial_finite = cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]
+#             if distr_k_finite ==0
+#                 distr_k_finite= 1e-16
+#             end
+#             if distr_k_initial_finite==0
+#                 distr_k_initial_finite=1e-16
+#             end
+#             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
+#         end
+#     end
+#     # println("")
+#     # println("distr_bcondk prior normalisation: ")
+#     # printArray(distr_prime_on_grid[:,:,1])
     
-    for i_y in 1:n_par.ny
+#     for i_y in 1:n_par.ny
         
-            distr_prime_on_grid[:,:,i_y] .= distr_prime_on_grid[:,:,i_y].*distr_y[i_y]
+#             distr_prime_on_grid[:,:,i_y] .= distr_prime_on_grid[:,:,i_y].*distr_y[i_y]
         
-    end
+#     end
 
 
 # saveArray("out/m_star_a.csv",m_a_star[:,:,1])
@@ -419,15 +425,20 @@ distr_initial[end,:,:] = cdf_k_young_grid
 
 # saveArray("cdf_k_young_800k_in_200steps.csv",cdf_k_young_grid)
 # for i_y in 1:4
-# saveArray("cdf_bcondk_young_800k_500b_200steps_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
+# saveArray("out/cdf_bcondk_young_800k_500b_200steps_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
 # end
 # for i_y in 1:4
-#     saveArray("pdf_bcondk_young_org_iy$i_y.csv",ss_full_young.distrSS[:,:,i_y])
+#     saveArray("out/pdf_bcondk_young_org_iy$i_y.csv",ss_full_young.distrSS[:,:,i_y])
 # end
 for i_y in 1:4
-    saveArray("cdf_bcondk_young_org_iy$i_y.csv",cdf_b_cond_k_young[:,:,i_y])
-    end
-assert(1==0)
+    saveArray("out/pdf_k_young_org.csv",pdf_k_young)
+end
+saveArray("out/k_young.csv",ss_full_young.n_par.grid_k)
+# assert(0==1)
+# for i_y in 1:4
+#     saveArray("out/cdf_bcondk_young_org_iy$i_y.csv",cdf_b_cond_k_young[:,:,i_y])
+#     end
+# assert(1==0)
 # cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
 # cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
 
@@ -500,14 +511,16 @@ assert(1==0)
 
 
 # Tolerance for change in cdf from period to period
-tol = n_par.ϵ
+# tol = n_par.ϵ
+tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter = 200
+max_iter = 500
 # Init 
+convergence_course = NaN*ones(max_iter)
 distance = 9999.0 
 counts = 0
 cut_negatives = ones(Int64,(max_iter,3,n_par.ny)) 
-zero_occurances = ones(Int64,(max_iter,3,n_par.ny,100)) 
+zero_occurances = ones(Int64,(max_iter,3,n_par.ny,50)) 
 cut_negatives .*= (-1)
 zero_occurances .*= (-1)
 # println("initial distro: ")
@@ -544,13 +557,15 @@ while distance > tol && counts < max_iter
 
     difference = distr_old .- distr_initial
     distance = maximum(abs, difference)
-
+    convergence_course[counts] = distance
     println("$counts - distance: $distance")
     
     # mix in young marginal k distribution
     # distr_initial[end,:,:] = 0.5* distr_initial[end,:,:] .+ 0.5 .* cdf_k_young_grid
 
 end
+
+saveArray("out/difference.csv",convergence_course)
 
 println("Distribution Iterations: ", counts)
 println("Distribution Dist: ", distance)

@@ -116,6 +116,7 @@ function find_ss_policies(
     RB_guess::Float64,
     R_guess::Float64,
 )
+# println(n_par.grid_k)
     #   initialize distance variables
     dist = 9999.0
     dist1 = dist

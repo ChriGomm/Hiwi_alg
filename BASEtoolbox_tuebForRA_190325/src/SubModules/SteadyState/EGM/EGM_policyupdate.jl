@@ -84,6 +84,7 @@ function EGM_policyupdate!(
     m_par,
     warnme::Bool,
 )
+    # println(n_par.grid_k)
     ################### Copy/read-out stuff#####################################
     β::Float64 = m_par.β
     borrwedge = m_par.Rbar .* Tshock

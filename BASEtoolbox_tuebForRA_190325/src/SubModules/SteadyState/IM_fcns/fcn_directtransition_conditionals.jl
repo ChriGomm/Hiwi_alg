@@ -368,7 +368,7 @@ function DirectTransition_Splines!(
                 saveArray(newdir*"/cdf_k_initial_$i_y.csv",cdf_k_initial)
                 saveArray(newdir*"/cdf_prime_$i_y.csv",distr_prime_on_grid[:,:,i_y]/pdf_inc[i_y])
                 saveArray(newdir*"/cutoff_count_$i_y.csv",cutof_counter[:,:,i_y])
-                saveArray(newdir*"/zero_occurance_$i_y.csv",zero_o[:,2,i_y,:])
+                saveArray(newdir*"/zero_occurance_$i_y.csv",zero_o[:,3,i_y,:])
             end
             # printArray(cutof_counter[count-6:count,:,1])
             

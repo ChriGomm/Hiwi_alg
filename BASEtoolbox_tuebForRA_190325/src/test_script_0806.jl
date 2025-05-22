@@ -188,16 +188,19 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         for i_y in 1:n_par.ny
         # i_y =1
         num_der = diff(cdf_initial[:,i_y])[1:end]
-        # initial_cut = findfirst(num_der[40:end].==0)
-        # initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
-        # cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
-        # deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
-        # pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
+        initial_cut = findfirst(num_der[40:end].==0)
+        initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
+        cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
+        deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
+        pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
+
         # cut_merge = findfirst(num_der.<0.001)
         # cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
         # cutoff[counting,pos,i_y] = cut_merge
         # merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
-        pdf_k_initial_y = num_der
+
+        # pdf_k_initial_y = num_der
+
         neg_index = findfirst(pdf_k_initial_y.<0)
         if ! isnothing(neg_index)
             # println("neg found: ",pos)

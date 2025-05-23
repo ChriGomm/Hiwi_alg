@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-# include("BASEforHANK.jl")
+include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.

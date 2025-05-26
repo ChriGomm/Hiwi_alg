@@ -225,18 +225,18 @@ function DirectTransition_Splines!(
     # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,4])
     # println("max cdfk: ",maximum(abs, cdf_k_prime_on_grid_a)," max cdf bcondk a: ",maximum(abs,cdf_b_cond_k_prime_on_grid_a)," max cdf bcondk n: ",maximum(abs,cdf_b_cond_k_prime_on_grid_n))
 
-    cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
+    # cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
     
     distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
     
     # distr_prime_on_grid[n_par.nm+1,:,:] = cumsum(pdf_k_young,dims=1)
-    pdf_k_initialy = pdf_k_young
+    pdf_k_initial = pdf_k_young
     pdf_k_primey = pdf_k_young
     # pdf_k_initial = zeros(eltype(cdf_k_initial),(length(cdf_k_initial[:,1])-1,n_par.ny))
     # pdf_k_prime = zeros(eltype(distr_prime_on_grid[n_par.nm+1,:,:]),(length(distr_prime_on_grid[n_par.nm+1,:,:])-1,n_par.ny))
     
     #
-    pdf_k_initial = similar(cdf_k_initial)
+    # pdf_k_initial = similar(cdf_k_initial)
     pdf_k_prime = similar(distr_prime_on_grid[n_par.nm+1,:,:])
     pdf_k_a = similar(cdf_k_prime_on_grid_a)
     
@@ -260,7 +260,7 @@ function DirectTransition_Splines!(
 
 
     #
-    pdf_from_spline!(cdf_k_initial,pdf_k_initial,cutof_counter,zero_o,count,1)
+    # pdf_from_spline!(cdf_k_initial,pdf_k_initial,cutof_counter,zero_o,count,1)
     # println("pdf_k_initial: ",pdf_k_initial[:,4])
     pdf_from_spline!(distr_prime_on_grid[n_par.nm+1,:,:],pdf_k_prime,cutof_counter,zero_o,count,2)
     # println("pdf_k_prime: ",pdf_k_prime[:,4])
@@ -292,7 +292,7 @@ function DirectTransition_Splines!(
             # end
             # distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
 
-            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,i_k,i_y] .* pdf_k_a[i_k,i_y]  .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] .*pdf_k_initialy[i_k,i_y])./ pdf_k_primey[i_k,i_y]
+            distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,i_k,i_y] .* pdf_k_a[i_k,i_y]  .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] .*pdf_k_initial[i_k,i_y])./ pdf_k_primey[i_k,i_y]
 
             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= distr_prime_on_grid[1:n_par.nm,i_k,i_y]./distr_prime_on_grid[n_par.nm,i_k,i_y]
             # if distr_prime_on_grid[n_par.nm,i_k,i_y]>1
@@ -301,6 +301,11 @@ function DirectTransition_Splines!(
 
         end
     end
+    # newdir = "out/iterstep_normal"*"_$count"
+    # mkdir(newdir)
+    # for i_y in 1:n_par.ny
+    #     saveArray(newdir*"/distr_prior_y_MC_step_$i_y.csv",distr_prime_on_grid[:,:,i_y])
+    # end
     # println("")
     # println("distr_bcondk prior normalisation: ")
     # printArray(distr_prime_on_grid[:,:,1])
@@ -451,7 +456,7 @@ function DirectTransition_Splines_adjusters!(
         
 
 
-        diffcdfk = diff(cdf_k_initial[:,i_y],dims=1)/pdf_y
+        diffcdfk = diff(cdf_k_initial[:,i_y],dims=1)#/pdf_y
         for i_w_b = 1:length(n_par.w_sel_m)
             for i_w_k = 1:length(n_par.w_sel_k)
                 # calculate cdf for w unsortedly
@@ -498,13 +503,13 @@ function DirectTransition_Splines_adjusters!(
         
         cdf_k_prime_on_grid_a[:,i_y] .= cdf_k_int.(n_par.grid_k)
         # println("cdf_k: ",cdf_k_prime_on_grid_a[:,i_y])
-        k_marginal = [findfirst(m_a_aux_y .> n_par.grid_m[i_m]) for i_m in 1:n_par.nm]
-        k_marginal[isnothing.(k_marginal)] .= n_par.nk
-        k_marginal = [n_par.grid_k[k_marginal[i_m]] for i_m in 1:n_par.nm]
-        for i_k = 1:n_par.nk
-            k_input = min.(k_marginal,n_par.grid_k[i_k])
-            cdf_k_prime_dep_b[:,i_k,i_y] .= cdf_k_int.(k_input)
-        end
+        # k_marginal = [findfirst(m_a_aux_y .> n_par.grid_m[i_m]) for i_m in 1:n_par.nm]
+        # k_marginal[isnothing.(k_marginal)] .= n_par.nk
+        # k_marginal = [n_par.grid_k[k_marginal[i_m]] for i_m in 1:n_par.nm]
+        # for i_k = 1:n_par.nk
+        #     k_input = min.(k_marginal,n_par.grid_k[i_k])
+        #     cdf_k_prime_dep_b[:,i_k,i_y] .= cdf_k_int.(k_input)
+        # end
         # 3. Compute cdf over b' conditional on k'
         # 3.1 Start with k'>0
         for i_k = 2:n_par.nk
@@ -518,15 +523,15 @@ function DirectTransition_Splines_adjusters!(
         else
             w_li = locate(w_k[i_y],wgrid)
             # i would omit the +1
-            i_wk = w_li#+1
+            i_wk = w_li+1
             cdf_k_prime_on_grid_a[1,i_y] = cdf_w_y_spl(w_k[i_y])
             if w_m[i_y] < wgrid[1]
                 i_wb = 1
             else
-                i_wb = locate(w_m[i_y],wgrid)
+                i_wb = locate(w_m[i_y],wgrid)+1
             end
             # not sure either about i_wb-1
-            nodes2 = optb_sorted[max(i_wb-1,i_wk)+1:end]
+            nodes2 = optb_sorted[max(i_wb,i_wk):end]
             values2 = ones(length(nodes2))
             nodes1 = optb_sorted[i_wb:i_wk]
             values1 = (cdf_w_y[i_wb:i_wk]./cdf_k_prime_on_grid_a[1,i_y])

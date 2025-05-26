@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
@@ -188,18 +188,18 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         for i_y in 1:n_par.ny
         # i_y =1
         num_der = diff(cdf_initial[:,i_y])[1:end]
-        # initial_cut = findfirst(num_der[40:end].==0)
-        # initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
-        # cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
-        # deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
-        # pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
+        initial_cut = findfirst(num_der[40:end].==0)
+        initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
+        cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
+        deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
+        pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
 
         # cut_merge = findfirst(num_der.<0.001)
         # cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
         # cutoff[counting,pos,i_y] = cut_merge
         # merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
 
-        pdf_k_initial_y = num_der
+        # pdf_k_initial_y = num_der
 
         neg_index = findfirst(pdf_k_initial_y.<0)
         if ! isnothing(neg_index)
@@ -295,7 +295,7 @@ for (i_w_b,i_b) in enumerate(n_par.w_sel_m)
     end
 end
 sortingw = sortperm(w)
-
+# assert(0==1)
 @load "Output/Saves/young250x250.jld2" ss_full_young
 pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.nk,ss_full_young.n_par.ny)
 cdf_k_young = cumsum(pdf_k_young,dims=1)
@@ -413,12 +413,13 @@ for i_y in 1:n_par.ny
     cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
     cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k)
 end
+cdf_k_young_grid = cdf_k_young_grid ./ cdf_k_young_grid[end,:]'
 pdf_k_young_grid = NaN*ones(n_par.nk,n_par.ny)
 for i_y in 1:n_par.ny
     pdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,pdf_k_young[:,i_y])
     pdf_k_young_grid[:,i_y] = pdf_k_young_itp.(n_par.grid_k)
 end
-
+pdf_k_young_grid = pdf_k_young_grid ./ cdf_k_young[end,:]'
 cdf_m_young_grid = NaN*ones(n_par.nm,n_par.ny)
 for i_y in 1:n_par.ny
     cdf_m_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_m_young[:,i_y])
@@ -439,13 +440,14 @@ distr_initial[end,:,:] = cdf_k_young_grid
 #     saveArray("out/pdf_bcondk_young_org_iy$i_y.csv",ss_full_young.distrSS[:,:,i_y])
 # end
 
-saveArray("out/pdf_k_young_org.csv",pdf_k_young)
+saveArray("out/pdf_k_young_org.csv",pdf_k_young./cdf_k_young[end,:]')
+saveArray("out/pdf_k_young_grid.csv",pdf_k_young_grid)
 
 saveArray("out/k_young.csv",ss_full_young.n_par.grid_k)
 # assert(0==1)
 for i_y in 1:4
     saveArray("out/cdf_bcondk_young_grid_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
-    end
+end
 # assert(1==0)
 # cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
 # cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));

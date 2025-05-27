@@ -524,7 +524,7 @@ end
 # tol = n_par.ϵ
 tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter = 500
+max_iter = 10
 # Init 
 convergence_course = NaN*ones(max_iter)
 distance = 9999.0 

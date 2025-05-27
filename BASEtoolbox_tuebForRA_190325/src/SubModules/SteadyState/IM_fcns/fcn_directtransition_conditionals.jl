@@ -162,7 +162,8 @@ function DirectTransition_Splines!(
         w_k,
         w_m,
         n_par,
-        m_par;
+        m_par,
+        count;
         speedup = speedup
     )
     # println("cdf k prime deb b: ")
@@ -369,7 +370,7 @@ function DirectTransition_Splines!(
                 saveArray(newdir*"/cutoff_count_$i_y.csv",cutof_counter[:,:,i_y])
                 saveArray(newdir*"/zero_occurance_$i_y.csv",zero_o[:,2,i_y,:])
             end
-        elseif count%7==0
+        elseif false#count%7==0
             newdir = "out/iterstep_normal"*"_$count"
             mkdir(newdir)
             for i_y in 1:n_par.ny
@@ -416,13 +417,15 @@ function DirectTransition_Splines_adjusters!(
     w_k::AbstractArray,
     w_m::AbstractArray,
     n_par::NumericalParameters,
-    m_par::ModelParameters;
+    m_par::ModelParameters,
+    count;
     speedup::Bool = true
 )   
 
 # why use pdf_y in place of pdf_inc
 
-
+    newdir = "out/iterstep_normal"*"_$count"
+    mkdir(newdir)
     cdf_w = NaN*ones(eltype(cdf_k_initial),length(n_par.w_sel_k)*length(n_par.w_sel_m), n_par.ny)
     cdfend = 1.0
     cdf_k_prime_dep_b = zeros(n_par.nm,n_par.nk,n_par.ny)
@@ -451,12 +454,14 @@ function DirectTransition_Splines_adjusters!(
         end  
         # ?           
         cdf_b_cond_k_intp[1,1] = cdf_b_cond_k_initial[1,1,i_y]./pdf_y     
-
+        
+        # saveArray(newdir*"/interpol_cdf_bcondk_for_cdfw.csv",cdf_b_cond_k_intp[:,w_grid_sort])
         
         
-
+        # saveArray("interpol_cdf_bcondk_for_cdfw.csv",cdf_b_cond_k_intp[:,w_grid_sort])
 
         diffcdfk = diff(cdf_k_initial[:,i_y],dims=1)#/pdf_y
+
         for i_w_b = 1:length(n_par.w_sel_m)
             for i_w_k = 1:length(n_par.w_sel_k)
                 # calculate cdf for w unsortedly
@@ -467,6 +472,7 @@ function DirectTransition_Splines_adjusters!(
         optb_unsorted = view(m_a_prime,n_par.w_sel_m,n_par.w_sel_k,i_y)[:]
         optk_sorted = optk_unsorted[w_grid_sort]
         optb_sorted = optb_unsorted[w_grid_sort]
+        saveArray(newdir*"/optk_sorted_y$i_y.csv",optk_sorted)
         # normalize cdf_w
         # cdf_w_y .= min.(cdf_w_y,cdfend)
         # cdf_w_y[end] = cdfend
@@ -475,6 +481,7 @@ function DirectTransition_Splines_adjusters!(
         cdf_w_y = cdf_w_y[w_grid_sort]
 
         cdf_w_y .= cdf_w_y./cdf_w_y[end]
+        saveArray(newdir*"/cdf_w_y$i_y.csv",cdf_w_y)
         # compute spline of cdf_w on sorted grid for sorted cdf values
         cdf_w_y_spl = Interpolator(wgrid,cdf_w_y)
         # 2. Compute cdf over k' with DEGM
@@ -530,8 +537,9 @@ function DirectTransition_Splines_adjusters!(
             else
                 i_wb = locate(w_m[i_y],wgrid)+1
             end
+            # println("i_wk: ",i_wk," i_wb: ",i_wb)
             # not sure either about i_wb-1
-            nodes2 = optb_sorted[max(i_wb,i_wk):end]
+            nodes2 = optb_sorted[max(i_wb,i_wk)+1:end]
             values2 = ones(length(nodes2))
             nodes1 = optb_sorted[i_wb:i_wk]
             values1 = (cdf_w_y[i_wb:i_wk]./cdf_k_prime_on_grid_a[1,i_y])

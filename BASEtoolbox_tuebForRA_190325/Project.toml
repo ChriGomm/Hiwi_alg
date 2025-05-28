@@ -20,6 +20,7 @@ Flatten = "4c728ea3-d9ee-5c9a-9642-b6f7d7dc04fa"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 GR_jll = "d2c73de3-f751-5644-a686-071e5b155ba9"
 ImageMagick = "6218d12a-5da1-5696-b52f-db25d2ecc6d1"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
@@ -50,4 +51,5 @@ VegaLite = "112f6efa-9a02-5b7d-90c0-432ed331239a"
 XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
 
 [compat]
+Interpolations = "0.15.1"
 PyCall = "1.96.4"

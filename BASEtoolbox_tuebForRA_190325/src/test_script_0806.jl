@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-# include("BASEforHANK.jl")
+include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
 # set BLAS threads to the number of Julia threads.
@@ -188,18 +188,18 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
         for i_y in 1:n_par.ny
         # i_y =1
         num_der = diff(cdf_initial[:,i_y])[1:end]
-        initial_cut = findfirst(num_der[40:end].==0)
-        initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
-        cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
-        deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
-        pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
+        # initial_cut = findfirst(num_der[40:end].==0)
+        # initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
+        # cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
+        # deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
+        # pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
 
         # cut_merge = findfirst(num_der.<0.001)
         # cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
         # cutoff[counting,pos,i_y] = cut_merge
         # merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
 
-        # pdf_k_initial_y = num_der
+        pdf_k_initial_y = num_der
 
         neg_index = findfirst(pdf_k_initial_y.<0)
         if ! isnothing(neg_index)
@@ -247,7 +247,7 @@ mylinearinterpolate = BASEforHANK.Tools.mylinearinterpolate
 mylinearcondcdf = BASEforHANK.Tools.mylinearcondcdf
 include(path_to_transition)
 
-pdf_b_cond_k = ones(n_par.nm, n_par.nk, n_par.ny) / sum(n_par.nm * n_par.ny)
+pdf_b_cond_k = ones(n_par.nm, n_par.nk-1, n_par.ny) / sum(n_par.nm * n_par.ny)
 cdf_b_cond_k = cumsum(pdf_b_cond_k, dims=1)
 cdf_k = cumsum(pdf_b_cond_k[1,:,:], dims=1)
 
@@ -301,6 +301,25 @@ pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.n
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
 
+square_grid = ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk)
+for i_m in 1:ss_full_young.n_par.nm
+    intp_pdf = Interpolator(ss_full_young.n_par.grid_k,ss_full_young.distrSS[i_m,:,1])
+    square_grid[i_m,:]= intp_pdf.(range(0,ss_full_young.n_par.grid_k[end],length=ss_full_young.n_par.nk))
+end
+
+for i_k in 1:ss_full_young.n_par.nk
+    intp_pdf = Interpolator(ss_full_young.n_par.grid_m,square_grid[:,i_k])
+    square_grid[:,i_k]= intp_pdf.(range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm))
+end
+
+hom_k = range(0,ss_full_young.n_par.grid_k[end],length=ss_full_young.n_par.nk)
+hom_m = range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm)
+
+pdf_b_k_combined_intp = cubic_spline_interpolation((hom_m,hom_k),square_grid)
+
+Delta = 0.001
+check_young = [pdf_b_k_combined_intp(ss_full_young.n_par.grid_m[ib]+Delta,ss_full_young.n_par.grid_k[ik]+Delta) for ib in 1:ss_full_young.n_par.nm-1, ik in 1:ss_full_young.n_par.nk-1]
+ss_full_young.distrSS[1:end-1,1:end-1,1]-check_young
 # @timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
 #     cdf_b_cond_k_prime_on_grid_a,
 #     cdf_k_prime_on_grid_a,
@@ -401,19 +420,20 @@ include(path_to_transition)
 cdf_k_young_grid = cdf_k_young #similar(cdf_k_young)
 cdf_b_cond_k_young = NaN*ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
 cdf_b_cond_k_young_grid = similar(cdf_b_cond_k_initial)
+pdf_b_k_combined_intp
 for i_y in 1:n_par.ny
-    for i_k in 1:n_par.nk
+    for i_k in 1:n_par.nk-1
         cdf_b_cond_k_young[:,i_k,i_y] = cumsum(ss_full_young.distrSS[:,i_k,i_y],dims=1)/pdf_k_young[i_k,i_y]
         cdf_b_cond_k_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,i_k,i_y])
         cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
     end
 end
-cdf_k_young_grid = NaN*ones(n_par.nm,n_par.ny)
+cdf_k_young_grid = NaN*ones(size(n_par.grid_k_cdf)[1],n_par.ny)
 for i_y in 1:n_par.ny
     cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
-    cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k)
+    cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k_cdf)
 end
-cdf_k_young_grid = cdf_k_young_grid ./ cdf_k_young_grid[end,:]'
+# cdf_k_young_grid = cdf_k_young_grid ./ cdf_k_young_grid[end,:]'
 pdf_k_young_grid = NaN*ones(n_par.nk,n_par.ny)
 for i_y in 1:n_par.ny
     pdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,pdf_k_young[:,i_y])
@@ -428,7 +448,7 @@ end
 
 
 # cdf_prime = zeros(size(cdf_guess))
-distr_initial = NaN*ones(n_par.nm+1,n_par.nk,n_par.ny)
+distr_initial = NaN*ones(n_par.nm+1,n_par.nk-1,n_par.ny)
 distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
 distr_initial[end,:,:] = cdf_k_young_grid
 
@@ -519,12 +539,11 @@ end
 # printArray(cutof[:,:,1])
 
 
-
 # Tolerance for change in cdf from period to period
 # tol = n_par.ϵ
 tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter = 500
+max_iter =30
 # Init 
 convergence_course = NaN*ones(max_iter)
 distance = 9999.0 

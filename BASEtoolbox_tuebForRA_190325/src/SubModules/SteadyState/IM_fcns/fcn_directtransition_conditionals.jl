@@ -139,7 +139,7 @@ function DirectTransition_Splines!(
    
 
     cdf_b_cond_k_initial = copy(distr_initial_on_grid[1:n_par.nm,:,:])
-    # cdf_k_initial = copy(reshape(distr_initial_on_grid[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
+    cdf_k_initial = copy(reshape(distr_initial_on_grid[n_par.nm+1,:,:], (n_par.nk-1, n_par.ny)));
     # cdf_k_initial = cdf_k_young
 
     cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
@@ -151,7 +151,7 @@ function DirectTransition_Splines!(
         m_a_prime, 
         k_a_prime,
         cdf_b_cond_k_initial,
-        cdf_k_young,#cdf_k_initial,
+        cdf_k_initial,#cdf_k_young,#
         pdf_inc,
         RB,
         R,
@@ -237,7 +237,7 @@ function DirectTransition_Splines!(
     # pdf_k_prime = zeros(eltype(distr_prime_on_grid[n_par.nm+1,:,:]),(length(distr_prime_on_grid[n_par.nm+1,:,:])-1,n_par.ny))
     
     #
-    # pdf_k_initial = similar(cdf_k_initial)
+    pdf_k_initial = similar(cdf_k_initial)
     pdf_k_prime = similar(distr_prime_on_grid[n_par.nm+1,:,:])
     pdf_k_a = similar(cdf_k_prime_on_grid_a)
     
@@ -261,7 +261,7 @@ function DirectTransition_Splines!(
 
 
     #
-    # pdf_from_spline!(cdf_k_initial,pdf_k_initial,cutof_counter,zero_o,count,1)
+    pdf_from_spline!(cdf_k_initial,pdf_k_initial,cutof_counter,zero_o,count,1)
     # println("pdf_k_initial: ",pdf_k_initial[:,4])
     pdf_from_spline!(distr_prime_on_grid[n_par.nm+1,:,:],pdf_k_prime,cutof_counter,zero_o,count,2)
     # println("pdf_k_prime: ",pdf_k_prime[:,4])
@@ -428,7 +428,7 @@ function DirectTransition_Splines_adjusters!(
     # mkdir(newdir)
     cdf_w = NaN*ones(eltype(cdf_k_initial),length(n_par.w_sel_k)*length(n_par.w_sel_m), n_par.ny)
     cdfend = 1.0
-    # cdf_k_prime_dep_b = zeros(n_par.nm,n_par.nk,n_par.ny)
+    # cdf_k_prime_dep_b = zeros(n_par.nm, n_par.nk,n_par.ny)
     for i_y in 1:n_par.ny
         # 0. normalize
         pdf_y = pdf_inc[i_y]
@@ -453,7 +453,7 @@ function DirectTransition_Splines_adjusters!(
             end      
         end  
         # ?           
-        cdf_b_cond_k_intp[1,1] = cdf_b_cond_k_initial[1,1,i_y]./pdf_y     
+        # cdf_b_cond_k_intp[1,1] = cdf_b_cond_k_initial[1,1,i_y]./pdf_y     
         
         # saveArray(newdir*"/interpol_cdf_bcondk_for_cdfw.csv",cdf_b_cond_k_intp[:,w_grid_sort])
         

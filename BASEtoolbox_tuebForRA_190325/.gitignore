@@ -9,6 +9,9 @@ src/out_full_spline_derivative/img_bcondk/**
 src/out_full_spline_derivative/img_pdf_k/**
 src/out_partial_grid_derivative_and_the_spline_one/img_bcondk/** 
 src/out_partial_grid_derivative_and_the_spline_one/img_pdf_k/**
+src/out/pdf_young_comb_sqrgrid**
+**.png
+**.csv
 # exception to the rule
 !src/Preprocessor/generated_fcns/.gitkeep 
 # keep estimated model
@@ -17,4 +20,5 @@ src/out_partial_grid_derivative_and_the_spline_one/img_pdf_k/**
 !src/Output/Saves/linearresults.jld2
 !src/Output/Saves/parameter_example.jld2
 !src/Output/Saves/steadystate.jld2
-src/out/pdf_young_comb_sqrgrid*
+!src/Output/**
+

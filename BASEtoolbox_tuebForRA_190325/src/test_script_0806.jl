@@ -44,9 +44,9 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
-using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots
+using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots, Interpolations
 # set BLAS threads to the number of Julia threads.
 # prevents BLAS from grabbing all threads on a machine
 BASEforHANK.LinearAlgebra.BLAS.set_num_threads(Threads.nthreads())
@@ -300,26 +300,48 @@ sortingw = sortperm(w)
 pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.nk,ss_full_young.n_par.ny)
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
-
-square_grid = ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk)
-for i_m in 1:ss_full_young.n_par.nm
-    intp_pdf = Interpolator(ss_full_young.n_par.grid_k,ss_full_young.distrSS[i_m,:,1])
-    square_grid[i_m,:]= intp_pdf.(range(0,ss_full_young.n_par.grid_k[end],length=ss_full_young.n_par.nk))
-end
-
+check_young = ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
+pdf_k_young_grid = ones(size(n_par.grid_k_cdf)[1],n_par.ny)
+cdf_b_cond_k_young_grid = ones(n_par.nm,n_par.nk-1,n_par.ny)
+stretch = 25
+for i_y in 1:4
+square_grid = ones(ss_full_young.n_par.nm*stretch,ss_full_young.n_par.nk)
 for i_k in 1:ss_full_young.n_par.nk
-    intp_pdf = Interpolator(ss_full_young.n_par.grid_m,square_grid[:,i_k])
-    square_grid[:,i_k]= intp_pdf.(range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm))
+    intp_pdf = Interpolator(ss_full_young.n_par.grid_m,ss_full_young.distrSS[:,i_k,i_y])
+    a = intp_pdf.(range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm*stretch))
+    # println("len of intp ",size(a))
+     square_grid[:,i_k] =a
 end
 
-hom_k = range(0,ss_full_young.n_par.grid_k[end],length=ss_full_young.n_par.nk)
-hom_m = range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm)
+square_grid_k = ones(ss_full_young.n_par.nm*stretch,ss_full_young.n_par.nk*stretch)
+for i_m in 1:ss_full_young.n_par.nm*stretch
+    intp_pdf = Interpolator(ss_full_young.n_par.grid_k,square_grid[i_m,:])
+    square_grid_k[i_m,:]= intp_pdf.(range(0,ss_full_young.n_par.grid_k[end],length=ss_full_young.n_par.nk*stretch))
+end
 
-pdf_b_k_combined_intp = cubic_spline_interpolation((hom_m,hom_k),square_grid)
+hom_k = range(0,ss_full_young.n_par.grid_k[end],length=ss_full_young.n_par.nk*stretch)
+hom_m = range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm*stretch)
 
-Delta = 0.001
-check_young = [pdf_b_k_combined_intp(ss_full_young.n_par.grid_m[ib]+Delta,ss_full_young.n_par.grid_k[ik]+Delta) for ib in 1:ss_full_young.n_par.nm-1, ik in 1:ss_full_young.n_par.nk-1]
-ss_full_young.distrSS[1:end-1,1:end-1,1]-check_young
+pdf_b_k_combined_intp = LinearInterpolation((hom_m,hom_k),square_grid_k)
+# pdf_b_k_combined_intp = cubic_spline_interpolation((hom_m,hom_k),square_grid_k)
+pdf_grid_for_k = [pdf_b_k_combined_intp(n_par.grid_m[ib],n_par.grid_k_cdf[ik]) 
+for ib in 1:n_par.nm, ik in 1:size(n_par.grid_k_cdf)[1]]
+pdf_grid_for_cond = [pdf_b_k_combined_intp(n_par.grid_m[ib],n_par.grid_k[ik]) 
+for ib in 1:n_par.nm, ik in 1:n_par.nk-1]
+pdf_k_young_grid[:,i_y] = sum(pdf_grid_for_k,dims=1)
+cdf_b_cond_k_young_grid[:,:,i_y] = cumsum(pdf_grid_for_cond,dims=1) ./ sum(pdf_grid_for_k,dims=1)
+cdf_b_cond_k_young_grid[:,:,i_y] = cdf_b_cond_k_young_grid[:,:,i_y] ./ cdf_b_cond_k_young_grid[end,:,i_y]'
+# Delta = 0.00
+# check_young[:,:,i_y] = [pdf_b_k_combined_intp(ss_full_young.n_par.grid_m[ib]+Delta,ss_full_young.n_par.grid_k[ik]+Delta) for ib in 1:ss_full_young.n_par.nm, ik in 1:ss_full_young.n_par.nk]
+# ss_full_young.distrSS[1:end-1,1:end-1,1]-check_young
+
+    # saveArray("out/pdf_young_comb_sqrgrid_y$i_y.csv",square_grid_k[:,:])
+    # saveArray("out/pdf_young_comb_org_y$i_y.csv",ss_full_young.distrSS[:,:,i_y])
+    # saveArray("out/pdf_young_comb_intp_y$i_y.csv",check_young[:,:,i_y])
+    saveArray("out/cdf_b_cond_k_young_y$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
+end
+saveArray("out/pdf_k_young_grid.csv",pdf_k_young_grid)
+# assert(1==0)
 # @timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
 #     cdf_b_cond_k_prime_on_grid_a,
 #     cdf_k_prime_on_grid_a,
@@ -417,40 +439,40 @@ ss_full_young.distrSS[1:end-1,1:end-1,1]-check_young
 using PCHIPInterpolation
 include(path_to_transition)
 
-cdf_k_young_grid = cdf_k_young #similar(cdf_k_young)
-cdf_b_cond_k_young = NaN*ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
-cdf_b_cond_k_young_grid = similar(cdf_b_cond_k_initial)
-pdf_b_k_combined_intp
-for i_y in 1:n_par.ny
-    for i_k in 1:n_par.nk-1
-        cdf_b_cond_k_young[:,i_k,i_y] = cumsum(ss_full_young.distrSS[:,i_k,i_y],dims=1)/pdf_k_young[i_k,i_y]
-        cdf_b_cond_k_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,i_k,i_y])
-        cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
-    end
-end
-cdf_k_young_grid = NaN*ones(size(n_par.grid_k_cdf)[1],n_par.ny)
-for i_y in 1:n_par.ny
-    cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
-    cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k_cdf)
-end
-# cdf_k_young_grid = cdf_k_young_grid ./ cdf_k_young_grid[end,:]'
-pdf_k_young_grid = NaN*ones(n_par.nk,n_par.ny)
-for i_y in 1:n_par.ny
-    pdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,pdf_k_young[:,i_y])
-    pdf_k_young_grid[:,i_y] = pdf_k_young_itp.(n_par.grid_k)
-end
-pdf_k_young_grid = pdf_k_young_grid ./ cdf_k_young[end,:]'
-cdf_m_young_grid = NaN*ones(n_par.nm,n_par.ny)
-for i_y in 1:n_par.ny
-    cdf_m_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_m_young[:,i_y])
-    cdf_m_young_grid[:,i_y] = cdf_m_young_itp.(n_par.grid_m)
-end
+# cdf_k_young_grid = cdf_k_young #similar(cdf_k_young)
+# cdf_b_cond_k_young = NaN*ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
+# cdf_b_cond_k_young_grid = similar(cdf_b_cond_k_initial)
+# # pdf_b_k_combined_intp
+# for i_y in 1:n_par.ny
+#     for i_k in 1:n_par.nk-1
+#         cdf_b_cond_k_young[:,i_k,i_y] = cumsum(ss_full_young.distrSS[:,i_k,i_y],dims=1)/pdf_k_young[i_k,i_y]
+#         cdf_b_cond_k_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,i_k,i_y])
+#         cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
+#     end
+# end
+# cdf_k_young_grid = NaN*ones(size(n_par.grid_k_cdf)[1],n_par.ny)
+# for i_y in 1:n_par.ny
+#     cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
+#     cdf_k_young_grid[:,i_y] = cdf_k_young_itp.(n_par.grid_k_cdf)
+# end
+# # cdf_k_young_grid = cdf_k_young_grid ./ cdf_k_young_grid[end,:]'
+# pdf_k_young_grid = NaN*ones(n_par.nk,n_par.ny)
+# for i_y in 1:n_par.ny
+#     pdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,pdf_k_young[:,i_y])
+#     pdf_k_young_grid[:,i_y] = pdf_k_young_itp.(n_par.grid_k)
+# end
+# pdf_k_young_grid = pdf_k_young_grid ./ cdf_k_young[end,:]'
+# cdf_m_young_grid = NaN*ones(n_par.nm,n_par.ny)
+# for i_y in 1:n_par.ny
+#     cdf_m_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_m_young[:,i_y])
+#     cdf_m_young_grid[:,i_y] = cdf_m_young_itp.(n_par.grid_m)
+# end
 
 
 # cdf_prime = zeros(size(cdf_guess))
 distr_initial = NaN*ones(n_par.nm+1,n_par.nk-1,n_par.ny)
 distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
-distr_initial[end,:,:] = cdf_k_young_grid
+distr_initial[end,:,:] = cumsum(pdf_k_young_grid,dims=1)
 
 # saveArray("cdf_k_young_800k_in_200steps.csv",cdf_k_young_grid)
 # for i_y in 1:4
@@ -460,14 +482,14 @@ distr_initial[end,:,:] = cdf_k_young_grid
 #     saveArray("out/pdf_bcondk_young_org_iy$i_y.csv",ss_full_young.distrSS[:,:,i_y])
 # end
 
-saveArray("out/pdf_k_young_org.csv",pdf_k_young./cdf_k_young[end,:]')
-saveArray("out/pdf_k_young_grid.csv",pdf_k_young_grid)
+# saveArray("out/pdf_k_young_org.csv",pdf_k_young./cdf_k_young[end,:]')
+# saveArray("out/pdf_k_young_grid.csv",pdf_k_young_grid)
 
-saveArray("out/k_young.csv",ss_full_young.n_par.grid_k)
+# saveArray("out/k_young.csv",ss_full_young.n_par.grid_k)
 # assert(0==1)
-for i_y in 1:4
-    saveArray("out/cdf_bcondk_young_grid_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
-end
+# for i_y in 1:4
+#     saveArray("out/cdf_bcondk_young_grid_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
+# end
 # assert(1==0)
 # cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
 # cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
@@ -543,7 +565,7 @@ end
 # tol = n_par.ϵ
 tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter =30
+max_iter =200
 # Init 
 convergence_course = NaN*ones(max_iter)
 distance = 9999.0 
@@ -606,7 +628,7 @@ println("Distribution Dist: ", distance)
 
 # println("final distr: ")
 # printArray(distr_initial[:,:,1])
-K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k)
+K = BASEforHANK.SteadyState.expected_value(sum(distr_initial[end,:,:],dims=2)[:],n_par.grid_k[1:end-1])
 struct ssStruc
     distrSS
     n_par
@@ -629,7 +651,7 @@ end
 B = BASEforHANK.SteadyState.expected_value(sum(cdf_b,dims=2)[:],n_par.grid_m)
 # plot(n_par.grid_k,sum(distr_initial[end,:,:],dims=2))
 # plot(n_par.grid_m,sum(cdf_b,dims=2))
-
+mkdir("out/Figures")
 for i_y = 1:n_par.ny
     for i_k = 1:40
         plot(n_par.grid_m,cdf_b_cond_k_young_grid[:,i_k,1],label="young",xlims=(0,20))
@@ -637,6 +659,6 @@ for i_y = 1:n_par.ny
         vline!([m_a_aux[i_k,1]],label="m_a",linestyle=:dash)
         i_n = findfirst(m_n_star[:,2,1] .> m_a_aux[2,1])
         vline!([n_par.grid_m[i_n]],label="m_n^{-1}(m_a)",linestyle=:dash)
-        savefig(string("Output/Figures/comp_cdf_b_k$i_k","_$i_y.pdf"))
+        savefig(string("out/Figures/comp_cdf_b_k$i_k","_$i_y.pdf"))
     end
 end

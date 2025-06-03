@@ -17,3 +17,4 @@ src/out_partial_grid_derivative_and_the_spline_one/img_pdf_k/**
 !src/Output/Saves/linearresults.jld2
 !src/Output/Saves/parameter_example.jld2
 !src/Output/Saves/steadystate.jld2
+src/out/pdf_young_comb_sqrgrid*

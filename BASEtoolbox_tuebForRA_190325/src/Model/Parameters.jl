@@ -141,7 +141,7 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
     # Numerical Parameters to be set in advance
     m_par::ModelParameters = ModelParameters()
     ny::Int = 4     # ngrid income (4 is the coarse grid used initially in finding the StE)
-    nk::Int = 101      # ngrid illiquid assets (capital) (10 is the coarse grid used initially in finding the StE)
+    nk::Int = 100      # ngrid illiquid assets (capital) (10 is the coarse grid used initially in finding the StE)
     nm::Int = 100      # ngrid liquid assets (bonds) (10 is the coarse grid used initially in finding the StE)
     ny_copula::Int = 4  # ngrid for copula in income (rule of thumb: divide ny, w/o entrepreneur, by two)
     nk_copula::Int = 20   # ngrid for copula in illiquid assets (capital, rule of thumb: divide nk by twelve)
@@ -218,7 +218,7 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
     # grid_m[1:nm] =  grid_m[nm+1] = 500
         vcat((range(0, stop = sqrt(mmax - mmin ), length = nm-1)) .^ 2 .+ mmin,ones(1)*150)
     aux::Float64 = 2*grid_k[end-2]-(grid_k[end-3]+grid_k[end-2])/2
-    grid_k_cdf::Array{Float64,1} = vcat(vcat(zeros(1),(grid_k[2:end-3]+grid_k[3:end-2])/2),vcat(ones(1)*aux,ones(1)*150))
+    grid_k_cdf::Array{Float64,1} = grid_k#vcat(vcat(zeros(1),(grid_k[2:end-3]+grid_k[3:end-2])/2),vcat(ones(1)*aux,ones(1)*150))
 
     # meshes for income, bonds, capital
     mesh_y::Array{Float64,3} = repeat(reshape(grid_y, (1, 1, ny)), outer = [nm, nk, 1])

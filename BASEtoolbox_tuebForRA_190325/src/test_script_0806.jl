@@ -44,7 +44,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-include("BASEforHANK.jl")
+# include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots, Interpolations
 # set BLAS threads to the number of Julia threads.
@@ -201,32 +201,32 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
 
         pdf_k_initial_y = num_der
 
-        neg_index = findfirst(pdf_k_initial_y.<0)
-        if ! isnothing(neg_index)
-            # println("neg found: ",pos)
-            cut_neg = findlast(pdf_k_initial_y[1:neg_index].>0)
-            neg_cut[counting,pos,i_y] = cut_neg
-            # endval =  
-            resid = [i*(pdf_k_initial_y[cut_neg]-minimum(abs, [pdf_k_initial_y[cut_neg]/4,1e-20]))/(length(pdf_k_initial_y)-cut_neg) for i in 1:(length(pdf_k_initial_y)-cut_neg)]
-            pdf_k_initial_y[cut_neg+1:end] = resid
-        end
-        zero_index = findfirst(pdf_k_initial_y[2:end].==0)
-        if ! isnothing(zero_index)
-            # println("zero found, ",pos," i_y=",i_y)
-            indices = findall(pdf_k_initial_y[2:end].==0)
-            zero_occurance[counting,pos,i_y,1:length(indices)] .= indices .+ 1
-            # println("zero at: ",indices,"zero_index: ",zero_index)
-            for index in indices
-                index +=1
-                if index ==2
-                    pdf_k_initial_y[index] = pdf_k_initial_y[index+1]
-                elseif index == length(pdf_k_initial_y)
-                    pdf_k_initial_y[index] = pdf_k_initial_y[index-1]
-                else
-                    pdf_k_initial_y[index] = (pdf_k_initial_y[index+1]+pdf_k_initial_y[index-1])/2
-                end
-            end
-        end
+        # neg_index = findfirst(pdf_k_initial_y.<0)
+        # if ! isnothing(neg_index)
+        #     println("neg found: ",pos)
+        #     cut_neg = findlast(pdf_k_initial_y[1:neg_index].>0)
+        #     neg_cut[counting,pos,i_y] = cut_neg
+        #     # endval =  
+        #     resid = [i*(pdf_k_initial_y[cut_neg]-minimum(abs, [pdf_k_initial_y[cut_neg]/4,1e-20]))/(length(pdf_k_initial_y)-cut_neg) for i in 1:(length(pdf_k_initial_y)-cut_neg)]
+        #     pdf_k_initial_y[cut_neg+1:end] = resid
+        # end
+        # zero_index = findfirst(pdf_k_initial_y[2:end].==0)
+        # if ! isnothing(zero_index)
+        #     println("zero found, ",pos," i_y=",i_y)
+        #     indices = findall(pdf_k_initial_y[2:end].==0)
+        #     zero_occurance[counting,pos,i_y,1:length(indices)] .= indices .+ 1
+        #     println("zero at: ",indices,"zero_index: ",zero_index)
+        #     for index in indices
+        #         index +=1
+        #         if index ==2
+        #             pdf_k_initial_y[index] = pdf_k_initial_y[index+1]
+        #         elseif index == length(pdf_k_initial_y)
+        #             pdf_k_initial_y[index] = pdf_k_initial_y[index-1]
+        #         else
+        #             pdf_k_initial_y[index] = (pdf_k_initial_y[index+1]+pdf_k_initial_y[index-1])/2
+        #         end
+        #     end
+        # end
             
 
         pdf_initial[2:end,i_y] = pdf_k_initial_y
@@ -270,6 +270,8 @@ cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar)*((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k[j_k])) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
 
 w_eval_cut = [findlast((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k)) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
+# w_eval_cut = [findfirst(100 .>=(RK.*n_par.grid_k)) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
+
 #calc sorting for wealth
 # for i_b in 1:length(n_par.w_sel_m)
 #     for i_k in 1:length(n_par.w_sel_k)
@@ -483,6 +485,11 @@ end
 # cdf_prime = zeros(size(cdf_guess))
 distr_initial = NaN*ones(n_par.nm+1,n_par.nk,n_par.ny)
 distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
+for i_y in 1:n_par.ny
+    for i_k = 2:n_par.nk
+        distr_initial[1:end-1,i_k,i_y] .= Float64.(m_a_aux[i_k] .<= n_par.grid_m)
+    end
+end
 distr_initial[end,:,:] = cdf_k_young_grid
 
 # saveArray("cdf_k_young_800k_in_200steps.csv",cdf_k_young_grid)
@@ -577,7 +584,7 @@ end
 # tol = n_par.ϵ
 tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter = 200
+max_iter = 15
 # Init 
 convergence_course = NaN*ones(max_iter)
 distance = 9999.0 

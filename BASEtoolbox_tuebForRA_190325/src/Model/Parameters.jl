@@ -210,7 +210,8 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
     grid_k::Array{Float64,1} = #ones(nk)#range(kmin,stop=kmax,length=nk)# grid_k[1:nk] =# 
     # vcat(exp.(range(log(kmin + 1.0), stop = log(kmax + 1.0), length = nk-1)) .- 1.0,ones(1)*150)
     # grid_k[nk+1]= 500
-        vcat((range(0, stop = sqrt(kmax - kmin ), length = nk-2)) .^ 2 .+ kmin,vcat(ones(1)*110,ones(1)*150))
+        # vcat((range(0, stop = sqrt(kmax - kmin ), length = nk-2)) .^ 2 .+ kmin,vcat(ones(1)*110,ones(1)*150))
+        vcat((range(0, stop = sqrt(kmax - kmin ), length = nk-1)) .^ 2 .+ kmin,ones(1)*150)
     # grid liquid assets:
     grid_m::Array{Float64,1} = 
     # vcat(exp.(range(0, stop = log(mmax - mmin + 1.0), length = nm-1)) .+ mmin .- 1.0,ones(1)*150)
@@ -218,7 +219,7 @@ julia> n_par = NumericalParameters(mmin = -6.6, mmax = 1000)
     # grid_m[1:nm] =  grid_m[nm+1] = 500
         vcat((range(0, stop = sqrt(mmax - mmin ), length = nm-1)) .^ 2 .+ mmin,ones(1)*150)
     aux::Float64 = 2*grid_k[end-2]-(grid_k[end-3]+grid_k[end-2])/2
-    grid_k_cdf::Array{Float64,1} = grid_k#vcat(vcat(zeros(1),(grid_k[2:end-3]+grid_k[3:end-2])/2),vcat(ones(1)*aux,ones(1)*150))
+    grid_k_cdf::Array{Float64,1} = vcat(vcat(zeros(1),(grid_k[2:end-3]+grid_k[3:end-2])/2),vcat(ones(1)*aux,ones(1)*150))
 
     # meshes for income, bonds, capital
     mesh_y::Array{Float64,3} = repeat(reshape(grid_y, (1, 1, ny)), outer = [nm, nk, 1])

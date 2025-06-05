@@ -268,6 +268,8 @@ cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 # m_a_prime = m_a_star
 
 w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar)*((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k[j_k])) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
+
+w_eval_cut = [findlast((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k)) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
 #calc sorting for wealth
 # for i_b in 1:length(n_par.w_sel_m)
 #     for i_k in 1:length(n_par.w_sel_k)
@@ -575,7 +577,7 @@ end
 # tol = n_par.ϵ
 tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter = 500
+max_iter = 200
 # Init 
 convergence_course = NaN*ones(max_iter)
 distance = 9999.0 
@@ -606,6 +608,7 @@ while distance > tol && counts < max_iter
         w_eval_grid,
         sortingw,
         w[sortingw],
+        w_eval_cut,
         m_a_aux,
         w_k,
         w_m,

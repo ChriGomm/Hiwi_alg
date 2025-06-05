@@ -122,6 +122,7 @@ function DirectTransition_Splines!(
     w_eval_grid,
     w_grid_sort,
     wgrid,
+    w_eval_cut,
     m_a_aux,
     w_k,
     w_m,
@@ -158,6 +159,7 @@ function DirectTransition_Splines!(
         w_grid_sort,
         wgrid,
         w_eval_grid,
+        w_eval_cut,
         m_a_aux,
         w_k,
         w_m,
@@ -413,6 +415,7 @@ function DirectTransition_Splines_adjusters!(
     w_grid_sort::AbstractArray,
     wgrid::AbstractArray,
     w_eval_grid::AbstractArray,
+    w_eval_cut::AbstractArray,
     m_a_aux::AbstractArray,
     w_k::AbstractArray,
     w_m::AbstractArray,
@@ -465,7 +468,7 @@ function DirectTransition_Splines_adjusters!(
         for i_w_b = 1:length(n_par.w_sel_m)
             for i_w_k = 1:length(n_par.w_sel_k)
                 # calculate cdf for w unsortedly
-                cdf_w_y[i_w_b + (i_w_k-1)*length(n_par.w_sel_m)] = cdf_k_initial[1,i_y]*cdf_b_cond_k_intp[1,i_w_b+(i_w_k-1)*length(n_par.w_sel_m)]/pdf_y + sum(cdf_b_cond_k_intp[2:end,i_w_b+(i_w_k-1)*length(n_par.w_sel_m)].*diffcdfk)
+                cdf_w_y[i_w_b + (i_w_k-1)*length(n_par.w_sel_m)] = cdf_k_initial[1,i_y]*cdf_b_cond_k_intp[1,i_w_b+(i_w_k-1)*length(n_par.w_sel_m)]/pdf_y + sum(cdf_b_cond_k_intp[2:w_eval_cut[i_w_b,i_w_k],i_w_b+(i_w_k-1)*length(n_par.w_sel_m)].*diffcdfk[1:w_eval_cut[i_w_b,i_w_k]-1])
             end
         end
         optk_unsorted = view(k_a_prime,n_par.w_sel_m,n_par.w_sel_k,i_y)[:]

@@ -7,6 +7,7 @@
 # push!(LOAD_PATH, pwd())
 # pre-process user inputs for model setup
 using Printf
+# print Array to terminal
 function printArray(a::AbstractArray)
     for i in 1:size(a)[1]
         for j in 1:size(a)[2]
@@ -51,6 +52,7 @@ using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Pl
 # prevents BLAS from grabbing all threads on a machine
 BASEforHANK.LinearAlgebra.BLAS.set_num_threads(Threads.nthreads())
 
+# not needed, only if one wants to mix derivatives calculated via splines and via diff()
 function merge_distr!(final::AbstractArray,merger::AbstractArray,cut::Int64,scale::Int64)
     scale = cut-1<scale ? cut-1 : scale
     weight = [i*1/scale for i in 0:scale]
@@ -86,10 +88,7 @@ n_par = NumericalParameters(
         distr_names = BASEforHANK.distr_names,
         method_for_ss_distr="splines" # method for finding the stationary distribution
     )
-#    n_par.grid_k[1:n_par.nk] = exp.(range(log(n_par.kmin+ 1.0), stop = log(n_par.kmax+420  + 1.0), length = n_par.nk)) .- 1.0
-# #    n_par.grid_k[n_par.nk]= 500
-#    n_par.grid_m[1:n_par.nm] = exp.(range(0, stop = log(n_par.mmax+450 - n_par.mmin + 1.0), length = n_par.nm)) .+ n_par.mmin .- 1.0
-#    n_par.grid_m[n_par.nm] = 500
+
 # Kdiff ---------------------
 
 K_guess = 25.0018
@@ -184,22 +183,25 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
     # saveArray(func_dir*"/k_star$i"*"_a.csv",k_a_star[:,:,i])
     # end
     # assert(0==1)
+    
     function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,neg_cut::AbstractArray,zero_occurance::AbstractArray,counting::Int64,pos::Int64)
         for i_y in 1:n_par.ny
         # i_y =1
-        num_der = diff(cdf_initial[:,i_y])[1:end]
-        # initial_cut = findfirst(num_der[40:end].==0)
-        # initial_cut = isnothing(initial_cut) ? length(cdf_initial[:,i_y]) : initial_cut+40-1
-        # cdf_k_initial_intp = Interpolator(vcat(n_par.grid_k[2:initial_cut-1],n_par.grid_k[end]),vcat(cdf_initial[2:initial_cut-1,i_y],cdf_initial[end,i_y]))
-        # deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
-        # pdf_k_initial_y = vcat(num_der[1]*ones(1),deriv_initial.(n_par.grid_k[3:end]))
+        num_der = diff(cdf_initial[:,i_y])
 
-        # cut_merge = findfirst(num_der.<0.001)
-        # cut_merge = isnothing(cut_merge) ? initial_cut-2 : cut_merge-1
-        # cutoff[counting,pos,i_y] = cut_merge
-        # merge_distr!(pdf_k_initial_y,num_der,cut_merge,5)
+        # variant for derivative from splines 
+
+        
+        cdf_k_initial_intp = Interpolator(n_par.grid_k,cdf_initial[:,i_y])
+        deriv_initial = k -> ForwardDiff.derivative(cdf_k_initial_intp,k)
+        pdf_k_initial_y = deriv_initial.(n_par.grid_k[2:end])
+
+        
+        # variant for derivative via diff
 
         pdf_k_initial_y = num_der
+
+        # check and correct for negative and zero values but should be avoided
 
         # neg_index = findfirst(pdf_k_initial_y.<0)
         # if ! isnothing(neg_index)
@@ -230,7 +232,7 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
             
 
         pdf_initial[2:end,i_y] = pdf_k_initial_y
-        pdf_initial[1,i_y] = cdf_k_initial[1,i_y]
+        pdf_initial[1,i_y] = cdf_initial[1,i_y]
         end
         
         
@@ -247,6 +249,7 @@ mylinearinterpolate = BASEforHANK.Tools.mylinearinterpolate
 mylinearcondcdf = BASEforHANK.Tools.mylinearcondcdf
 include(path_to_transition)
 
+# uniform initial distribution
 pdf_b_cond_k = ones(n_par.nm, n_par.nk, n_par.ny) / sum(n_par.nm * n_par.ny)
 cdf_b_cond_k = cumsum(pdf_b_cond_k, dims=1)
 cdf_k = cumsum(pdf_b_cond_k[1,:,:], dims=1)
@@ -264,13 +267,25 @@ cdf_k_initial = copy(cdf_k);
 cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
 cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 
-# k_a_prime = k_a_star
-# m_a_prime = m_a_star
 
+
+# grid of b values for a certain w value. The first to indices refer to a certain w value, whereas the last index goes through all k values and the content of the array are the b values, such that w stays constant with changing k.
 w_eval_grid = [    (RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* (n_par.grid_k[n_par.w_sel_k[i_k]]-n_par.grid_k[j_k]) .+ m_par.Rbar .* n_par.grid_m[n_par.w_sel_m[i_b]] .* (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0)) /(RB .+ (n_par.grid_m[n_par.w_sel_m[i_b]] .< 0) .* m_par.Rbar)*((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k[j_k])) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k), j_k in 1:n_par.nk    ]
 
+
+# w_eval_grid sets all entries to zero where k is larger than the wanted w, which is not possible. Therefore when calculating integrals for cdf_w, those values have to be sorted out.
 w_eval_cut = [findlast((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k)) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
-# w_eval_cut = [findfirst(100 .>=(RK.*n_par.grid_k)) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
+
+
+# alternative that includes the first k value that is larger than w in contrast to the above version where the last value where k<w is taken
+
+# w_eval_cut = [minimum([findlast((RB .* n_par.grid_m[n_par.w_sel_m[i_b]] .+ RK .* n_par.grid_k[n_par.w_sel_k[i_k]] ).>=(RK.*n_par.grid_k))+1,100]) for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
+
+
+# alternative that takes the whole w_eval_grid
+
+# w_eval_cut = [n_par.nk for i_b in 1:length(n_par.w_sel_m), i_k in 1:length(n_par.w_sel_k)]
+
 
 #calc sorting for wealth
 # for i_b in 1:length(n_par.w_sel_m)
@@ -292,18 +307,24 @@ end
 
 test = [i*j*l for i in ["1","2","3"], j in ["1","2","3"], l in ["1","2","3"]]
 
+# w_grid corresponding to w_eval_grid
 w = NaN*ones(length(n_par.w_sel_m)*length(n_par.w_sel_k))
 for (i_w_b,i_b) in enumerate(n_par.w_sel_m)
     for (i_w_k,i_k) in enumerate(n_par.w_sel_k)
         w[i_w_b + length(n_par.w_sel_m)*(i_w_k-1)] = RB .* n_par.grid_m[i_b] .+ RK .* n_par.grid_k[i_k] .+ m_par.Rbar .* n_par.grid_m[i_b] .* (n_par.grid_m[i_b] .< 0)
     end
 end
+
+# indices that sort w
 sortingw = sortperm(w)
 # assert(0==1)
+
 @load "Output/Saves/young250x250.jld2" ss_full_young
 pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.nk,ss_full_young.n_par.ny)
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
+
+# # calculate conditionals via interpolation of pdf (alternative)
 
 # check_young = ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
 # pdf_k_young_grid = ones(size(n_par.grid_k_cdf)[1],n_par.ny)
@@ -314,8 +335,8 @@ cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.
 # for i_k in 1:ss_full_young.n_par.nk
 #     intp_pdf = Interpolator(ss_full_young.n_par.grid_m,ss_full_young.distrSS[:,i_k,i_y])
 #     a = intp_pdf.(range(0,ss_full_young.n_par.grid_m[end],length=ss_full_young.n_par.nm*stretch))
-#     # println("len of intp ",size(a))
-#      square_grid[:,i_k] =a
+#     println("len of intp ",size(a))
+#     square_grid[:,i_k] =a
 # end
 
 # square_grid_k = ones(ss_full_young.n_par.nm*stretch,ss_full_young.n_par.nk*stretch)
@@ -339,67 +360,6 @@ cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.
 # cdf_b_cond_k_young_grid[:,:,i_y] = cdf_b_cond_k_young_grid[:,:,i_y] ./ cdf_b_cond_k_young_grid[end,:,i_y]'
 # end
 
-# @timev cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
-#     cdf_b_cond_k_prime_on_grid_a,
-#     cdf_k_prime_on_grid_a,
-#     m_a_star, 
-#     k_a_star,
-#     cdf_b_cond_k_initial,
-#     cdf_k_initial,
-#     distr_y,
-#     RB,
-#     RK,
-#     sortingw,
-#     w[sortingw],
-#     w_eval_grid,
-#     m_a_aux,
-#     w_k,
-#     w_m,
-#     n_par,
-#     m_par;
-#     speedup = false
-# )
-
-# cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
-
-
-# # include(path_to_transition)
-
-# @timev DirectTransition_Splines_non_adjusters!(
-#     cdf_b_cond_k_prime_on_grid_n,
-#     m_n_star, 
-#     cdf_b_cond_k_initial,
-#     distr_y,
-#     n_par,
-# )
-# distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
-# cdf_k_initial_orig = copy(cdf_k_initial)
-# cdf_k_initial = cdf_k_initial ./ cdf_k_initial[end,:]'
-# distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
-
-#     for i_y in 1:n_par.ny
-#         distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
-#         for i_k in 2:n_par.nk
-#             distr_k_finite = distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]
-#             distr_k_initial_finite = cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]
-#             if distr_k_finite ==0
-#                 distr_k_finite= 1e-16
-#             end
-#             if distr_k_initial_finite==0
-#                 distr_k_initial_finite=1e-16
-#             end
-#             distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*distr_k_initial_finite)./ (distr_k_finite)
-#         end
-#     end
-#     # println("")
-#     # println("distr_bcondk prior normalisation: ")
-#     # printArray(distr_prime_on_grid[:,:,1])
-    
-#     for i_y in 1:n_par.ny
-        
-#             distr_prime_on_grid[:,:,i_y] .= distr_prime_on_grid[:,:,i_y].*distr_y[i_y]
-        
-#     end
 
 
 # saveArray("out/m_star_a.csv",m_a_star[:,:,1])
@@ -408,29 +368,11 @@ cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.
 # saveArray("out/cdf_k_initial.csv",cdf_k_initial)
 
 
-# saveArray("out/cdfb_condk.csv",cdf_b_cond_k_initial[:,:,1])
-# saveArray("out/bcondk_a.csv",cdf_b_cond_k_prime_on_grid_a[:,:,1])
-# saveArray("out/bcondk_n.csv",cdf_b_cond_k_prime_on_grid_n[:,:,1])
-# saveArray("out/k_a.csv",cdf_k_prime_on_grid_a)
-# saveArray("out/cdf_prime.csv",distr_prime_on_grid[:,:,1]/distr_y[1])
 
 
 
-# cdf_b_cond_k_prime_on_grid = m_par.λ .* cdf_b_cond_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n
-# cdf_k_prime_on_grid = m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
 
-# # TEST
-# distr_prime_on_grid = zeros(n_par.nm+1,n_par.nk,n_par.ny)
-# distr_prime_on_grid[n_par.nm+1,:,:] .= cdf_k_prime_on_grid
-# for i_y in 1:n_par.ny
-#     distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
-#     for i_k in 2:n_par.nk
-#         distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
-#     end
-# end
 
-# m_n_star[:, 127, i_y] .+ n_par.grid_k[127]
-# findlast(m_n_star[:, 127, i_y] .+ n_par.grid_k[127] .== n_par.grid_m[1] + n_par.grid_k[127])
 
 # ------------------------------------
 using PCHIPInterpolation
@@ -446,23 +388,9 @@ for i_y in 1:n_par.ny
     end
 end
 
-for i_y in 1:n_par.ny
-    for i_k in 1:n_par.nk
-        cdf_b_cond_k_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,i_k,i_y])
-        cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
-    end
-end
 
-cdf_k_young_grid = cdf_k_young #similar(cdf_k_young)
-cdf_b_cond_k_young = NaN*ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
-cdf_b_cond_k_young_grid = similar(cdf_b_cond_k_initial)
-for i_y in 1:n_par.ny
-    for i_k in 1:n_par.nk
-        cdf_b_cond_k_young[:,i_k,i_y] = cumsum(ss_full_young.distrSS[:,i_k,i_y],dims=1)/pdf_k_young[i_k,i_y]
-        cdf_b_cond_k_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,i_k,i_y])
-        cdf_b_cond_k_young_grid[:,i_k,i_y] = cdf_b_cond_k_young_itp.(n_par.grid_m)
-    end
-end
+
+
 cdf_k_young_grid = NaN*ones(n_par.nm,n_par.ny)
 for i_y in 1:n_par.ny
     cdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,cdf_k_young[:,i_y])
@@ -470,11 +398,14 @@ for i_y in 1:n_par.ny
 end
 cdf_k_young_grid = cdf_k_young_grid ./ cdf_k_young_grid[end,:]'
 pdf_k_young_grid = NaN*ones(n_par.nk,n_par.ny)
+# for i_y in 1:n_par.ny
+#     pdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,pdf_k_young[:,i_y])
+#     pdf_k_young_grid[:,i_y] = pdf_k_young_itp.(n_par.grid_k)
+# end
+# pdf_k_young_grid = pdf_k_young_grid ./ cdf_k_young[end,:]'
 for i_y in 1:n_par.ny
-    pdf_k_young_itp = Interpolator(ss_full_young.n_par.grid_k,pdf_k_young[:,i_y])
-    pdf_k_young_grid[:,i_y] = pdf_k_young_itp.(n_par.grid_k)
+    pdf_k_young_grid[:,i_y] = vcat(ones(1)*cdf_k_young[1,i_y],diff(cdf_k_young_grid[:,i_y]))
 end
-pdf_k_young_grid = pdf_k_young_grid ./ cdf_k_young[end,:]'
 cdf_m_young_grid = NaN*ones(n_par.nm,n_par.ny)
 for i_y in 1:n_par.ny
     cdf_m_young_itp = Interpolator(ss_full_young.n_par.grid_m,cdf_m_young[:,i_y])
@@ -485,20 +416,16 @@ end
 # cdf_prime = zeros(size(cdf_guess))
 distr_initial = NaN*ones(n_par.nm+1,n_par.nk,n_par.ny)
 distr_initial[1:n_par.nm,:,:] = cdf_b_cond_k_initial
-for i_y in 1:n_par.ny
-    for i_k = 2:n_par.nk
-        distr_initial[1:end-1,i_k,i_y] .= Float64.(m_a_aux[i_k] .<= n_par.grid_m)
-    end
-end
-distr_initial[end,:,:] = cdf_k_young_grid
 
-# saveArray("cdf_k_young_800k_in_200steps.csv",cdf_k_young_grid)
-# for i_y in 1:4
-# saveArray("out/cdf_bcondk_young_800k_500b_200steps_iy$i_y.csv",cdf_b_cond_k_young_grid[:,:,i_y])
+# initialize distr_initial with conditional for adjusters
+# for i_y in 1:n_par.ny
+#     for i_k = 2:n_par.nk
+#         distr_initial[1:end-1,i_k,i_y] .= Float64.(m_a_aux[i_k,i_y] .<= n_par.grid_m)
+#     end
 # end
-# for i_y in 1:4
-#     saveArray("out/pdf_bcondk_young_org_iy$i_y.csv",ss_full_young.distrSS[:,:,i_y])
-# end
+distr_initial[end,:,:] = cdf_k_young_grid .*distr_y'
+
+
 
 saveArray("out/pdf_k_young_org.csv",pdf_k_young./cdf_k_young[end,:]')
 # saveArray("out/pdf_k_young_grid.csv",pdf_k_young_grid)
@@ -508,77 +435,9 @@ saveArray("out/k_young.csv",ss_full_young.n_par.grid_k)
 for i_y in 1:4
     saveArray("out/cdf_bcondk_young_org_iy$i_y.csv",cdf_b_cond_k_young[:,:,i_y])
 end
-# assert(1==0)
-# cdf_b_cond_k_initial = copy(distr_initial[1:n_par.nm,:,:])
-# cdf_k_initial = copy(reshape(distr_initial[n_par.nm+1,:,:], (n_par.nk, n_par.ny)));
-
-# cdf_b_cond_k_prime_on_grid_a = similar(cdf_b_cond_k_initial)
-# cdf_k_prime_on_grid_a = similar(cdf_k_initial)
 
 
-# cdf_w, cdf_k_prime_dep_b = DirectTransition_Splines_adjusters!(
-#         cdf_b_cond_k_prime_on_grid_a,
-#         cdf_k_prime_on_grid_a,
-#         m_a_star, 
-#         k_a_star,
-#         cdf_b_cond_k_initial,
-#         cdf_k_initial,
-#         distr_y,
-#         RB,
-#         RK,
-#         sortingw,
-#         w[sortingw],
-#         w_eval_grid,
-#         m_a_aux,
-#         w_k,
-#         w_m,
-#         n_par,
-#         m_par;
-#         speedup = true
-#     )
-
-#     cdf_b_cond_k_prime_on_grid_n = similar(cdf_b_cond_k_initial)
-
-
-#     DirectTransition_Splines_non_adjusters!(
-#         cdf_b_cond_k_prime_on_grid_n,
-#         m_n_star, 
-#         cdf_b_cond_k_initial,
-#         distr_y,
-#         n_par,
-#     )
-
-    # println("distro adj: ")
-    # printArray(cdf_b_cond_k_prime_on_grid_a[:,:,1])
-    # println("distro non-adj")
-    # printArray(cdf_b_cond_k_prime_on_grid_n[:,:,1])
-
-    # distr_prime_on_grid[n_par.nm+1,:,:] .= m_par.λ .* cdf_k_prime_on_grid_a .+ (1.0 - m_par.λ) .* cdf_k_initial
-
-    # for i_y in 1:1#n_par.ny
-    #     distr_prime_on_grid[1:n_par.nm,1,i_y] .= (m_par.λ .* cdf_b_cond_k_prime_on_grid_a[:,1,i_y] .* cdf_k_prime_on_grid_a[1,i_y] .+ (1.0 - m_par.λ) .* cdf_b_cond_k_prime_on_grid_n[:,1,i_y] .* cdf_k_initial[1,i_y])./ distr_prime_on_grid[n_par.nm+1,1,i_y]
-    #     for i_k in 2:n_par.nk
-    #         # println(i_k,(distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y]))
-            
-    #         distr_prime_on_grid[1:n_par.nm,i_k,i_y] .= (m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) .+ (1.0 - m_par.λ) .* .5*(cdf_b_cond_k_prime_on_grid_n[:,i_k,i_y] + cdf_b_cond_k_prime_on_grid_n[:,i_k-1,i_y]).*(cdf_k_initial[i_k,i_y] .- cdf_k_initial[i_k-1,i_y]))./ (distr_prime_on_grid[n_par.nm+1,i_k,i_y] .- distr_prime_on_grid[n_par.nm+1,i_k-1,i_y])
-    #         # println("row of dist: ",m_par.λ .*(cdf_k_prime_dep_b[:,i_k,i_y]-cdf_k_prime_dep_b[:,i_k-1,i_y]) )
-    #     end
-    # end
-    # println("distr_prime_on_grid[:,:,1])
-    # println("distr k")
-    # helper_fk = distr_prime_on_grid[n_par.nm+1,2:end,1]-distr_prime_on_grid[n_par.nm+1,1:end-1,1]
-    # println(cdf_b_cond_k_prime_on_grid_a)
-    # n = size(distr_prime_on_grid)
-    # distr_prime_on_grid .= reshape(reshape(distr_prime_on_grid, (n[1] .* n[2], n[3])) * n_par.Π, (n[1], n[2], n[3]))
-
-
-
-
-
-
-# printArray(cutof[:,:,1])
-
-
+    
 
 # Tolerance for change in cdf from period to period
 # tol = n_par.ϵ
@@ -586,15 +445,18 @@ tol = 1e-7
 # Maximum iterations to find steady state distribution
 max_iter = 15
 # Init 
+
 convergence_course = NaN*ones(max_iter)
 distance = 9999.0 
 counts = 0
+# keep track of negative and zero value occurrences, if sorted out in pdf_from_spline!
 cut_negatives = ones(Int64,(max_iter,3,n_par.ny)) 
-zero_occurances = ones(Int64,(max_iter,3,n_par.ny,50)) 
+zero_occurrences = ones(Int64,(max_iter,3,n_par.ny,50)) 
 cut_negatives .*= (-1)
-zero_occurances .*= (-1)
+zero_occurrences .*= (-1)
 # println("initial distro: ")
 # printArray(distr_initial[:,:,1])
+# possibility to change income distribution
 distr_y_update = transpose(copy(distr_y))
 while distance > tol && counts < max_iter
     global counts, distance, distr_initial, cdf_w, distr_y_update
@@ -603,20 +465,20 @@ while distance > tol && counts < max_iter
     
 
     cdf_w, counts = DirectTransition_Splines!(
-        distr_initial,
+        distr_initial, # distribution that will be updated
         m_n_star,
-        m_a_star,
+        m_a_star,  # optimal policies
         k_a_star,
-        copy(distr_initial),
-        n_par.Π,
-        distr_y_update,
+        copy(distr_initial), # old distribution
+        n_par.Π,  # transition matrix for markovian income update
+        distr_y_update, # income distribution
         RB,
         RK,
-        w_eval_grid,
-        sortingw,
-        w[sortingw],
-        w_eval_cut,
-        m_a_aux,
+        w_eval_grid,  # b_grid for cdf_w calculation
+        sortingw,   # sorting indices for w_grid
+        w[sortingw], # sorted grid
+        w_eval_cut, # cut position for cdf_w calculation, see above
+        m_a_aux, # optimal policy for given k
         w_k,
         w_m,
         n_par,
@@ -624,11 +486,13 @@ while distance > tol && counts < max_iter
         counts,
         distance,
         cut_negatives,
-        zero_occurances,
+        zero_occurrences,
         pdf_k_young_grid,
         cdf_k_young_grid;
         speedup = false
         )
+
+    # income distribution can be updated
     # distr_y_update = distr_y_update * n_par.Π
     # distr_y_update .= distr_y_update./ sum(distr_y_update)
     difference = distr_old .- distr_initial
@@ -669,13 +533,15 @@ end
 
 B = BASEforHANK.SteadyState.expected_value(sum(cdf_b,dims=2)[:],n_par.grid_m)
 
-label_map = [i for i in 1:n_par.nk-1]
+
+# closest values in the young grid to the k values from the current grid
+transfer_from_young = [i for i in 1:n_par.nk-1]
 for i_k in 1:n_par.nk-1
-    label_map[i_k] = findfirst(n_par.grid_k[i_k] .< ss_full_young.n_par.grid_k)
+    transfer_from_young[i_k] = findfirst(n_par.grid_k[i_k] .< ss_full_young.n_par.grid_k)
 end
 
-# plot(n_par.grid_k,sum(distr_initial[end,:,:],dims=2))
-# plot(n_par.grid_m,sum(cdf_b,dims=2))
+# F(b|k) is plotted for different k values
+# plotted is always the degm result together with the nearest k young results
 mkdir("out/Figures")
 for i_y = 1:n_par.ny
     i_k = 1
@@ -686,11 +552,11 @@ for i_y = 1:n_par.ny
     vline!([n_par.grid_m[i_n]],label="m_n^{-1}(m_a)",linestyle=:dash)
     savefig(string("out/Figures/comp_cdf_b_k$i_k","_$i_y.pdf"))
     for i_k = 2:40
-        k_minus = round(ss_full_young.n_par.grid_k[label_map[i_k]-1],digits=4)
-        k_plus = round(ss_full_young.n_par.grid_k[label_map[i_k]],digits=4)
+        k_minus = round(ss_full_young.n_par.grid_k[transfer_from_young[i_k]-1],digits=4)
+        k_plus = round(ss_full_young.n_par.grid_k[transfer_from_young[i_k]],digits=4)
         k_degm = round(n_par.grid_k[i_k],digits=4)
-        plot(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,label_map[i_k]-1,1],label="young k=$k_minus",xlims=(0,20))
-        plot!(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,label_map[i_k],1],label="young k=$k_plus",xlims=(0,20))
+        plot(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,transfer_from_young[i_k]-1,1],label="young k=$k_minus",xlims=(0,20))
+        plot!(ss_full_young.n_par.grid_m,cdf_b_cond_k_young[:,transfer_from_young[i_k],1],label="young k=$k_plus",xlims=(0,20))
         plot!(n_par.grid_m,distr_initial[1:end-1,i_k,1]/distr_y[1],label="degm k=$k_degm")
         vline!([m_a_aux[i_k,1]],label="m_a",linestyle=:dash)
         i_n = findfirst(m_n_star[:,2,1] .> m_a_aux[2,1])

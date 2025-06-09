@@ -45,7 +45,7 @@ end
 
 
 include("Preprocessor/PreprocessInputs.jl")
-# include("BASEforHANK.jl")
+include("BASEforHANK.jl")
 using .BASEforHANK
 using BenchmarkTools, Revise, LinearAlgebra, PCHIPInterpolation, ForwardDiff, Plots, Interpolations
 # set BLAS threads to the number of Julia threads.
@@ -184,6 +184,7 @@ Paux = n_par.Π^1000          # Calculate ergodic ince distribution from transit
     # end
     # assert(0==1)
     
+    
     function pdf_from_spline!(cdf_initial::AbstractArray,pdf_initial::AbstractArray,neg_cut::AbstractArray,zero_occurance::AbstractArray,counting::Int64,pos::Int64)
         for i_y in 1:n_par.ny
         # i_y =1
@@ -317,13 +318,20 @@ end
 
 # indices that sort w
 sortingw = sortperm(w)
+
+optk_sorted = ones(length(sortingw),n_par.ny)
+for i_y in 1:n_par.ny
+    optk_unsorted = view(k_a_star,n_par.w_sel_m,n_par.w_sel_k,i_y)
+    optk_sorted[:,i_y] = optk_unsorted[sortingw]
+end
+saveArray("out/optk_sorted.csv",optk_sorted)
 # assert(0==1)
 
 @load "Output/Saves/young250x250.jld2" ss_full_young
 pdf_k_young = reshape(sum(ss_full_young.distrSS, dims = 1),ss_full_young.n_par.nk,ss_full_young.n_par.ny)
 cdf_k_young = cumsum(pdf_k_young,dims=1)
 cdf_m_young = cumsum(reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny),dims=1)
-
+pdf_m_young = reshape(sum(ss_full_young.distrSS, dims = 2),ss_full_young.n_par.nm,ss_full_young.n_par.ny)
 # # calculate conditionals via interpolation of pdf (alternative)
 
 # check_young = ones(ss_full_young.n_par.nm,ss_full_young.n_par.nk,ss_full_young.n_par.ny)
@@ -429,7 +437,7 @@ distr_initial[end,:,:] = cdf_k_young_grid .*distr_y'
 
 saveArray("out/pdf_k_young_org.csv",pdf_k_young./cdf_k_young[end,:]')
 # saveArray("out/pdf_k_young_grid.csv",pdf_k_young_grid)
-
+saveArray("out/pdf_b_young_org.csv",pdf_m_young./cdf_m_young[end,:]')
 saveArray("out/k_young.csv",ss_full_young.n_par.grid_k)
 # assert(0==1)
 for i_y in 1:4
@@ -443,7 +451,7 @@ end
 # tol = n_par.ϵ
 tol = 1e-7
 # Maximum iterations to find steady state distribution
-max_iter = 15
+max_iter = 100
 # Init 
 
 convergence_course = NaN*ones(max_iter)

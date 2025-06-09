@@ -304,11 +304,11 @@ function DirectTransition_Splines!(
     # printArray(distr_prime_on_grid[:,:,1])
     
     # renormalize; to do: check theoretical justification
-    for i_k in 1:n_par.nk
-        distr_prime_on_grid[1:n_par.nm,i_k,:] .= distr_prime_on_grid[1:n_par.nm,i_k,:]./sum(distr_prime_on_grid[n_par.nm,i_k,:])
-    end
+    # for i_k in 1:n_par.nk
+    #     distr_prime_on_grid[1:n_par.nm,i_k,:] .= distr_prime_on_grid[1:n_par.nm,i_k,:]./sum(distr_prime_on_grid[n_par.nm,i_k,:])
+    # end
 
-    distr_prime_on_grid[n_par.nm+1,:,:] .= distr_prime_on_grid[n_par.nm+1,:,:]./sum(distr_prime_on_grid[n_par.nm+1,end,:])
+    # distr_prime_on_grid[n_par.nm+1,:,:] .= distr_prime_on_grid[n_par.nm+1,:,:]./sum(distr_prime_on_grid[n_par.nm+1,end,:])
     
 
 
@@ -330,35 +330,61 @@ function DirectTransition_Splines!(
             end
             mkdir(newdir)
             for i_y in 1:n_par.ny
-                saveArray(newdir*"/pdf_k_initial_$i_y.csv",pdf_k_initial)
                 saveArray(newdir*"/cdfb_condk_initial_$i_y.csv",cdf_b_cond_k_initial[:,:,i_y]/pdf_inc[i_y])
                 saveArray(newdir*"/bcondk_a_$i_y.csv",cdf_b_cond_k_prime_on_grid_a[:,:,i_y])
                 saveArray(newdir*"/bcondk_n_$i_y.csv",cdf_b_cond_k_prime_on_grid_n[:,:,i_y])
-                saveArray(newdir*"/pdf_k_prime_$i_y.csv",pdf_k_prime)
-                saveArray(newdir*"/pdf_k_a_$i_y.csv",pdf_k_a)
-                saveArray(newdir*"/cdf_k_initial_$i_y.csv",cdf_k_initial)
                 saveArray(newdir*"/cdf_prime_$i_y.csv",distr_prime_on_grid[:,:,i_y]/pdf_inc[i_y])
                 saveArray(newdir*"/cutoff_count_$i_y.csv",cutof_counter[:,:,i_y])
-                saveArray(newdir*"/zero_occurance_$i_y.csv",zero_o[:,2,i_y,:])
-                saveArray(newdir*"/cdf_w_$i_y.csv",cdf_w)
             end
+            saveArray(newdir*"/pdf_k_initial.csv",pdf_k_initial)
+            saveArray(newdir*"/pdf_k_prime.csv",pdf_k_prime)
+            saveArray(newdir*"/pdf_k_a.csv",pdf_k_a)
+            saveArray(newdir*"/cdf_k_initial.csv",cdf_k_initial)
+            saveArray(newdir*"/cdf_w.csv",cdf_w)  
+            cdf_b = NaN*ones(n_par.nm,n_par.ny)
+                for i_y in 1:n_par.ny
+                    diffcdfk = diff(distr_initial_on_grid[end,:,i_y],dims=1)/distr_initial_on_grid[end,end,i_y]
+                    for i_b = 1:n_par.nm
+                            cdf_b[i_b,i_y] = distr_initial_on_grid[end,1,i_y]*distr_initial_on_grid[i_b,1,i_y] + .5*sum((distr_initial_on_grid[i_b,2:end,i_y] .+ distr_initial_on_grid[i_b,1:end-1,i_y]).*diffcdfk)
+                        
+                    end
+                end
+                pdf_b = similar(cdf_b)
+                pdf_from_spline!(cdf_b,pdf_b,cutof_counter,zero_o,count,1)
+                saveArray(newdir*"/cdf_b.csv",cdf_b)
+                saveArray(newdir*"/pdf_b.csv",pdf_b)
         # regularly after defined number of iteration steps 
-        elseif true#count%7==0
+        elseif count%7==0
             newdir = "out/iterstep_normal"*"_$count"
             mkdir(newdir)
             for i_y in 1:n_par.ny
-                saveArray(newdir*"/pdf_k_initial_$i_y.csv",pdf_k_initial)
+                
                 saveArray(newdir*"/cdfb_condk_initial_$i_y.csv",cdf_b_cond_k_initial[:,:,i_y]/pdf_inc[i_y])
                 saveArray(newdir*"/bcondk_a_$i_y.csv",cdf_b_cond_k_prime_on_grid_a[:,:,i_y])
                 saveArray(newdir*"/bcondk_n_$i_y.csv",cdf_b_cond_k_prime_on_grid_n[:,:,i_y])
-                saveArray(newdir*"/pdf_k_prime_$i_y.csv",pdf_k_prime)
-                saveArray(newdir*"/pdf_k_a_$i_y.csv",pdf_k_a)
-                saveArray(newdir*"/cdf_k_initial_$i_y.csv",cdf_k_initial)
                 saveArray(newdir*"/cdf_prime_$i_y.csv",distr_prime_on_grid[:,:,i_y]/pdf_inc[i_y])
                 saveArray(newdir*"/cutoff_count_$i_y.csv",cutof_counter[:,:,i_y])
-                saveArray(newdir*"/cdf_w_$i_y.csv",cdf_w)
+                
+                
                 # saveArray(newdir*"/zero_occurance_$i_y.csv",zero_o[:,3,i_y,:])
             end
+            saveArray(newdir*"/pdf_k_initial.csv",pdf_k_initial)
+            saveArray(newdir*"/pdf_k_prime.csv",pdf_k_prime)
+            saveArray(newdir*"/pdf_k_a.csv",pdf_k_a)
+            saveArray(newdir*"/cdf_k_initial.csv",cdf_k_initial)
+            saveArray(newdir*"/cdf_w.csv",cdf_w)    
+            cdf_b = NaN*ones(n_par.nm,n_par.ny)
+                for i_y in 1:n_par.ny
+                    diffcdfk = diff(distr_initial_on_grid[end,:,i_y],dims=1)/distr_initial_on_grid[end,end,i_y]
+                    for i_b = 1:n_par.nm
+                            cdf_b[i_b,i_y] = distr_initial_on_grid[end,1,i_y]*distr_initial_on_grid[i_b,1,i_y] + .5*sum((distr_initial_on_grid[i_b,2:end,i_y] .+ distr_initial_on_grid[i_b,1:end-1,i_y]).*diffcdfk)
+                        
+                    end
+                end
+                pdf_b = similar(cdf_b)
+                pdf_from_spline!(cdf_b,pdf_b,cutof_counter,zero_o,count,1)
+                saveArray(newdir*"/cdf_b.csv",cdf_b)
+                saveArray(newdir*"/pdf_b.csv",pdf_b./cdf_b[end,:]')
             # printArray(cutof_counter[count-6:count,:,1])
             
             # for i in 1:3
